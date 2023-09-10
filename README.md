@@ -48,6 +48,7 @@ mejor filtraje al eliminar el stder (ya que habrá rutas a las que no tenga acce
 atraves de un atributo de os que es setuid(0) le indiacamos que queremos operar con el id=0 (root) y seguidamente, atraves de otro atributo de os, indicamos que 
 queremos hacer una llamada al sistema y abrir una bash.
 Hay muchos tipos de capabilities que nos permiten explotar diferentes servicios para ganar acceso a root. En iternet se pueden buscar. Ej GTFOBins. (NO FUNCIONAL)
+
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 PENTESTING: 5 fases -> Reconocimiento inicial | Busqueda de versiones y exploits | Explotación | Obtención de resultados | Documento ejecutivo y técnico (Auditorias)
 
