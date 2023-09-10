@@ -4,7 +4,9 @@ Apuntes sobre el curso de introdución al hacking ético de s4vitar
 Aclarar que las explotaciones que se muestran, en la gran mayoria, ya no son funcionales de la manera que él las explica (ya que són errores de seguridad para ganar acceso a root que ya han sido solucionados, en la versión actual de linux).
 Por lo tanto, estos metodos se deben de tomar como simple práctica y conocimiento básico.
 
-EXLOTACIÓN Y ABUSO DE LOS PRIVILEGIOS:
+
+EXLOTACIÓN Y ABUSO DE LOS PRIVILEGIOS 
+    
 -find \-perm -4000 (2>/dev/null) -> Para buscar quien tiene privilegios SUID (los directorios a los que no pueda acceder se redirijen hacia /dev/null).
 -cat /etc/shadow | grep "ENCRYPT_METHOD" -> Para mostrar el metodo de encritado de las passwords de los usuarios -> Con una wordlist como rockyou.
 -cat /etc/shadow | grep raul > hash -> Cojes la contraseña encriptada del usuario raul.
@@ -16,6 +18,7 @@ Si podemos escribir en /etc/passwd y cambiamos la X (contraseña hasheada) y pon
 ganar acceso poniendo poniendo la contraseña sin hashear que hemos sustituido en /etc/passwd. (NO COMPROVADO)
 
 DETECCIÓN DE TAREAS CRON A TRAVES DE UN SCRIPT EN BASH
+
 -ps -eo command -> lista los comandos que se estan ejecutando en tiempo real -> con esto creamos un script para que nos muestre por pantalla los comandos que se van 
 ejecutando en cada momento (diff entre los viejos y los nuevos), y aplicamos un filtro para ver solo lo que nos interesa (en este caso las tareas cron que se estan
 ejecutando). Seguidamente miraremos si algunas de estas tareas es writable por otros, y si lo es, modificaremos el archivo para que ejecute:
@@ -23,7 +26,9 @@ ejecutando). Seguidamente miraremos si algunas de estas tareas es writable por o
 con el comando:
 -bash -p -> donde -p es una flag de seguridad necesaria para hacer uso de los privilegios SUID. (NO FUNCIONAL)
 
+
 EXLOTACIÓN DE UN PATH HIJACKING FRENTE A UN BINARIO SUID
+
 Primeramente, programaremos un pequeño programa en c que lo unico que hace es ejecutar un par de llamadas a sistema. En c como medida de segurida nos obliga a
 declarar setuid(0) para que lo podamos ejecutar con los privilegios SUID cuando usamos un usuario no propietario (otros).
 -echo $PATH -> Nos mostrara las diferentes rutas por la que busca los comandos que ejecutamos. Por eso cuando hacemos la llamada a sistema whoami nos devuelve
@@ -37,7 +42,9 @@ Esto mismo se puede utilizar para lanzar una shell como root. Ya que el ejecutab
 prioritaria sea /tmp donde tendremos un script que lanza una shell (bash -p). Por lo tanto, cuando se ejecute el programa en c y se haga la llamada a sistema ps 
 utilizando la ruta relativa realmente se estará ejecutando nuestro script de la shell y ganaremos acceso a root. (NO FUNCIONAL)
 
+
 EXPLOTACIÓN Y ABUSO DE LAS CAPABILITIES EN LINUX
+
 Hay veces que es un tanto desafiante convertirse en root y no merece la pena. Existe otra alternativa, lo que se conoce como persistencias. Otra cosa que podriamos
 hacer para pasar más desapercibidos es mediante la explotación y el abuso de las capabilities.
 -getcap -r / 2>/dev/null -> Para mostrar las capabilities que hayan definidas a nivel de sistema en la raiz de forma recursiva, 2>/dev/null lo utilizamos para un
@@ -52,7 +59,9 @@ Hay muchos tipos de capabilities que nos permiten explotar diferentes servicios 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 PENTESTING: 5 fases -> Reconocimiento inicial | Busqueda de versiones y exploits | Explotación | Obtención de resultados | Documento ejecutivo y técnico (Auditorias)
 
+
 FASE DE RECONOCIMIENTO INICIAL - ENUMERACIÓN DE PUERTOS CON NMAP
+
 -ping -c 1 10.0.2.2 -> Envia una trama ICMP a la dirección IP que pongamos (el gateway del router en mi caso). Podemos observar que si el TTL esta cerca de 64, estamos
 ante una maquina linux y, por otro lado, si esta cerca de 128 nos estará responiendo una maquina windows.
 -nmap 10.0.2.2 -p- --open -T5 -v -n -oG allPorts -> La herramienta nmap nos permite escanear los puertos de una máquina objetivo. Con el argumento '-p-' le marcamos
