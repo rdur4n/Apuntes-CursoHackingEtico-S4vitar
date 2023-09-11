@@ -69,3 +69,42 @@ que queremos escanear los 65535 puertos. El argumento --open lo utilizamos para 
 agresividad (cuanto más alto más agresivo y rapido hará el escaneo). Ponemos -v para el verbose y conforme vaya encontrando puertos nos los vaya mostrando sin esperar
 a la finalización del escaneo completo. El -n para marcar que no queremos hacer resolución DNS ya que es muy costosa en tiempo. Y por último, lo exportamos en formato 
 grepable a un fichero llamado allPorts. 
+
+
+CREANDO UNA PEQUEÑA UTILIDAD EN BASH PARA EL FILTRADO DE PUERTOS
+
+La utilidad tendrá la función de mostrar la informació más relevante del fichero allPorts (fichero que contiene los puertos abiertos de una cierta dirección IP). Lo 
+haremos filtrando por expresiones regulares:
+-cat allPorts | grep -oP '\d{1,5}/open' | awk '{print $1}' FS= "/" | xargs | tr ' ' ',' -> Para filtrar el output del fichero allPorts. Primeramente, hacemos un primer
+filtrage con grep de forma que solo imprima por pantalla los numeros de 1 a 5 digitos que vayan acompañados de un /open. Con este output hacemos un segundo filtraje
+con awk para que muestre el primer argumento, teniendo como delimitador "/" (otra opción seria cut -d '/' -f 1). De esta forma solamente nos mostrará el numero del
+puerto abierto. Utilizaremos xargs para compartarlo todo en una misma linea y tr para efectuar la sustitución de los espacios por comas. Resultado: 22,80,443,445
+-cat allPorts | grep -oP '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}' | sort -u -> Mediante este filtraje con expresiones regulares se nos estarian listando las direcciones
+IP del fichero allPorts (dirección IP víctima). Para que no muestre la dirección IP repetidas veces utilizamos el comando sort -u.
+Para utilizar la utilidad modificaremos el archivo .zshrc en caso de tener una shell zsh (si trabajaramos en bash modificariamos .bashrc), creando una función que
+aplique los filtrajes mencionados al archivo allPorts:
+	
+	function extractPorts(){
+    	echo -e "\n${purpleColour}[*] Extracting information...${endColour}\n"
+    	ip_address=$(cat allPorts | grep -oP '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}' | sort -u | head -n 1)
+    	open_ports=$(cat allPorts | grep -oP '\d{1,5}/open' | awk '{print $1}' FS="/" | xargs | tr ' ' ',')
+
+   	echo -e "${redColour}[*] IP Address: ${endColour}${grayColour}$ip_address${endColour}"
+    	echo -e "${redColour}[*] Open Ports: ${endColour}${grayColour}$open_ports${endColour}\n"
+
+    	echo $open_ports | tr -d '\n' | xclip -sel clip
+    	echo -e "${purpleColour}[*] Ports copied to clipboard!${endColour}\n"
+	
+Para el correcto funcionamiento de los colores será necesario añadir al archivo las siguientes lineas:
+
+	greenColour="\e[0;32m\033[1m"
+	endColour="\033[0m\e[0m"
+	redColour="\e[0;31m\033[1m"
+	blueColour="\e[0;34m\033[1m"
+	yellowColour="\e[0;33m\033[1m"
+	purpleColour="\e[0;35m\033[1m"
+	turquoiseColour="\e[0;36m\033[1m"
+	grayColour="\e[0;37m\033[1m"
+
+De esta forma, utilizando el comando extractPorts allPorts se nos mostrará tanto la IP víctima como los puertos abiertos. Además, se nos habrá copiado los puertos
+abiertos en la clipboard (portapapales).
