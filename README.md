@@ -139,3 +139,115 @@ grayColour="\e[0;37m\033[1m"
 ```
 
 De esta forma, utilizando el comando `extractPorts allPorts` se mostrará tanto la IP víctima como los puertos abiertos. Además, los puertos abiertos se copiarán al portapapeles.
+
+---
+
+## DETECCIÓN DE VERSIÓN Y SERVICIOS CON NMAP
+
+Vamos a lanzar una serie de scripts básicos de enumeración con `nmap`, para tratar de descubrir la versión y el servicio que corren los puertos abiertos.
+
+```bash
+nmap -sC -sV -p22,80 10.0.2.2 -oN targeted
+```
+- `-sC`: Detectar el servicio (script) que está corriendo.
+- `-sV`: Detectar la versión.
+- `-p22,80`: Puertos específicos a escanear.
+- `10.0.2.2`: Dirección IP objetivo.
+- `-oN targeted`: Exportar en formato nmap a un fichero llamado `targeted`.
+
+Si encontramos el puerto 80 abierto (utilizado para las páginas web), podemos utilizar `whatweb` para ver la información más relevante.
+
+```bash
+whatweb http://10.10.10.188 2>/dev/null
+```
+Utilizamos `2>/dev/null` para la gestión de errores.
+
+---
+
+## TÉCNICAS PARA AGILIZAR NUESTROS ESCANEOS CON NMAP
+
+En algunas ocasiones, con la configuración anterior, el escaneo de `nmap` puede llevar bastante tiempo en completarse. Vamos a proponer otra configuración para tratar de solventar este problema. Una posible solución sería:
+
+```bash
+nmap --top-ports 5000 --open -T5 -v -n 10.10.10.11
+```
+- Escanea solo los 5000 puertos más relevantes, lo que puede ser una buena solución aunque es posible que se deje algún puerto abierto sin escanear.
+
+Otra solución sería (TCP-SYN scan):
+
+```bash
+nmap -sS --min-rate 5000 --open -vvv -n -Pn -p- 10.10.10.11
+```
+- `-sS`: Tipo de escaneo TCP-SYN.
+- `--min-rate 5000`: Emitir paquetes a una tasa no menor de 5000 paquetes/s.
+- `-Pn`: No aplicar host discovery (protocolo ARP).
+
+---
+
+## CREACIÓN DE HERRAMIENTA EN BASH PARA LA DETECCIÓN DE PUERTOS TCP ABIERTOS
+
+Para detectar puertos abiertos de una forma más discreta que con `nmap`, podríamos crear un script en bash llamado `portScan` que sea capaz de detectar los puertos abiertos mediante el protocolo TCP de forma manual.
+
+Para ello, nos aprovechamos de un concepto que nos permitirá saber si un puerto de una cierta dirección IP está abierto o no.
+
+```bash
+bash -c "echo ' ' > /dev/tcp/10.0.2.2/port"
+```
+Lo que estamos haciendo es mandar un espacio vacío mediante TCP a la IP y puerto indicado. Si lo enviamos a un puerto que está abierto, no hace nada; en cambio, cuando lo enviamos a un puerto cerrado, nos aparece un mensaje de error. Para comprobarlo:
+
+```bash
+echo $?
+```
+Si nos muestra un 0, el comando anterior ha tenido éxito (el puerto está abierto), y si nos muestra un 1, no ha tenido éxito (el puerto está cerrado).
+
+Aprovechando esto, podemos crear el siguiente script en bash para detectar puertos abiertos mediante TCP:
+
+```bash
+#!/bin/bash
+
+# ./portScan.sh <ip-address>
+
+# Colours
+greenColour="\e[0;32m\033[1m"
+endColour="\033[0m\e[0m"
+redColour="\e[0;31m\033[1m"
+
+if [ $1 ]; then
+    ip_address=$1
+    for port in $(seq 1 65535); do
+        timeout 1 bash -c "echo ' ' > /dev/tcp/$ip_address/$port" && echo -e "[*] Port ${redColour}$port${endColour} - ${greenColour}OPEN${endColour}" &
+    done; wait
+else
+    echo -e "\n[*] Use: .portScan.sh <ip_address>\n"
+    exit 1
+fi
+```
+
+Combinamos el comando visto anteriormente con `&&` para que nos imprima el puerto abierto. El `&` final marca que utilice varios hilos, de forma que todas las peticiones salgan a la vez y no se tengan que esperar entre ellas.
+
+---
+
+## CREACIÓN DE HERRAMIENTA EN BASH PARA EL DESCUBRIMIENTO DE EQUIPOS EN LA RED
+
+Como en el ejemplo anterior, podemos utilizar `nmap` para el reconocimiento de máquinas en un segmento de red, pero es muy ruidoso. Por lo tanto, merece la pena que tengamos nuestro propio script. De forma similar al ejemplo anterior, nos aprovecharemos de un concepto en concreto. En este caso, si enviamos un ping a una dirección IP, esta nos contesta y el comando `echo $?` nos mostrará un 0. De forma contraria, si no nos contesta, nos devolverá un 1. Podemos crear el siguiente script:
+
+```bash
+#!/bin/bash
+
+# Colours
+greenColour="\e[0;32m\033[1m"
+endColour="\033[0m\e[0m"
+purpleColour="\e[0;35m\033[1m"
+redColour="\e[0;31m\033[1m"
+
+for i in $(seq 2 254); do
+    timeout 1 bash -c "ping -c 1 10.0.2.$i > /dev/null 2>&1" && echo -e "${redColour}[*]${endColour} ${purpleColour}Host 10.0.2.$i${endColour} - ${greenColour}ACTIVE${endColour}" &
+done; wait
+```
+
+- `> /dev/null 2>&1`: Se utiliza para que no se muestre el output del comando, de forma que solo veamos el mensaje.
+- El ejemplo está hecho con la dirección `10.0.2/24`, pero podemos modificarla según necesitemos e incluso poner un doble bucle para buscar en una red `/16`, por ejemplo.
+
+---
+
+
