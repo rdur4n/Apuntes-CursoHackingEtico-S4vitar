@@ -250,4 +250,127 @@ done; wait
 
 ---
 
+## RECONOCIMIENTO A TRAVÉS DE LOS SCRIPTS QUE INCORPORA NMAP POR CATEGORÍA
 
+Anteriormente hemos hablado de utilizar scripts básicos de enumeración con el parámetro `-sC`, pero ¿dónde se encuentran esos scripts y qué categoría tienen? Lo podemos hacer con los siguientes comandos:
+
+```bash
+updatedb
+```
+Para sincronizar todos los archivos existentes a nivel de sistema en una base de datos.
+
+```bash
+locate .nse | xargs grep "categories" | grep -oP '".*?"' | sort -u
+```
+- Una vez actualizado, con `locate` muestra la ruta absoluta de un archivo. En este caso, nos interesan los archivos con extensión `.nse` que son los scripts de `nmap`.
+- Paralelamente, con `xargs` ejecutamos `grep` para cada script y extraemos su categoría.
+- `grep -oP '".*?"'`: Filtra por expresiones regulares para mostrar toda la información entre comillas (el nombre de la categoría).
+- `sort -u`: Ordena de forma única.
+
+Hay un total de 14 categorías y sabiendo sus nombres podemos utilizarlos para lanzar una serie de scripts de una categoría en concreto. Por ejemplo:
+
+```bash
+nmap -p445 10.10.10.40 --script "vuln and safe" -oN smbScan
+```
+Para el puerto 445 (samba) estamos lanzando una serie de scripts de la categoría `vuln` y `safe` y exportando a un archivo llamado `smbScan` en formato nmap. Como vemos, las categorías se pueden fusionar con un `and` o un `or`.
+
+---
+
+## USO DE SCRIPTS ESPECÍFICOS DE NMAP Y USO DE ANALIZADORES DE TRÁFICO
+
+`Nmap`, aparte de la enumeración de servicios, también te permite, entre otras cosas, listar directorios que puedan existir en el servidor web (incluidos archivos). ¿Cómo hacemos esto? Mediante scripts:
+
+```bash
+nmap -p80 10.10.10.188 --script http-enum -oN webScan
+```
+- Utilizamos el script `http-enum` (fuzzing). Básicamente, este script envía peticiones al servidor web de directorios o archivos que puedan existir (método GET) utilizando un diccionario interno de `nmap`. Gracias al código que nos retorne el servidor a esta petición (`403 ERROR` o `200 OK`), sabremos si el directorio o archivo existe en el servidor web.
+
+Una forma de saber qué está pasando por detrás cuando ejecutamos este script es utilizando `tcpdump`:
+
+```bash
+tcpdump -i tun0 -w Captura.cap -v
+```
+Escucha el tráfico que pasa por la interfaz indicada y exporta el output en el fichero `Captura.cap`.
+
+Para interpretar esta captura, podemos utilizar `tshark` (wireshark sin interfaz gráfica) y aplicar filtros para averiguar qué diccionario interno está utilizando `nmap`:
+
+```bash
+tshark -r Captura.cap -Y "http" -Tfields -e tcp.payload 2>/dev/null | xxd -ps -r | grep "GET" | awk '{print $2}' | sort -u
+```
+- Se aplican varios filtros, primero por peticiones web `http`.
+- Con `-Tfields -e` aplicamos otro filtro del campo que nos interese (podemos saber los diferentes campos haciendo una pequeña búsqueda antes con el parámetro `-Tjson`).
+- Como este campo está codificado en hexadecimal, utilizamos `xxd` con los parámetros `-ps -r` para hacer el 'reverse' de la codificación y que de esta forma sea legible.
+- Una vez decodificado, aplicamos otro filtro para que solo nos interesen las peticiones `GET` y utilizamos `awk` para que nos muestre solamente el segundo parámetro.
+- `sort -u`: Ordena de forma única.
+
+---
+
+## USO DE WIRESHARK PARA EL ANÁLISIS DE TRÁFICO EN LA RED
+
+`Wireshark` es similar a `tshark` pero con interfaz gráfica, lo que lo hace un poco más fácil de manejar a pesar de sus limitaciones. Para poder abrir `wireshark` desde la terminal como un programa independiente, ejecutamos los siguientes comandos:
+
+```bash
+wireshark Captura.cap > /dev/null 2>&1 &
+disown
+```
+- Redirige el stderr output a `dev/null`.
+- Con `&` lo hacemos un proceso aislado a la terminal.
+- Finalmente, para que el proceso no muera al cerrar la terminal (ya que `wireshark` es el proceso hijo), ejecutamos `disown`.
+
+---
+
+## CREACIÓN DE SCRIPT EN PYTHON3 PARA IDENTIFICAR EL SISTEMA OPERATIVO
+
+Crearemos una utilidad en `python3` que, al proporcionar la dirección IP como parámetro, nos muestre el sistema operativo de la víctima. Esto se puede hacer mediante el campo `TTL` (64 en Linux y 128 en Windows) cuando lanzamos un ping. Es recomendable tener conocimientos básicos de Python para realizar este tipo de scripts.
+
+```python
+#!/usr/bin/python3
+import re, sys, subprocess
+
+# usage: $ python3 whichSystem.py <ip>
+
+if len(sys.argv) != 2:
+    print("\n[!] Usage: python3 " + sys.argv[0] + " <direccion-ip>\n")
+    sys.exit(1)
+
+def is_valid_ip(ip_address):
+    # Utilizamos una expresión regular para verificar el formato de la dirección IP
+    ip_pattern = r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"
+    return re.match(ip_pattern, ip_address) is not None
+
+def get_ttl(ip_address):
+    if not is_valid_ip(ip_address):
+        print("\n[!] Dirección IP no válida. Por favor, introduzca una dirección IP válida.\n")
+        sys.exit(1)
+
+    proc = subprocess.Popen(["/usr/bin/ping -c 1 %s" % ip_address, ""], stdout=subprocess.PIPE, shell=True)
+    (out, err) = proc.communicate()
+    out = out.split()
+    out = out[12].decode('utf-8')
+    ttl_value = re.findall(r"\d{1,3}", out)[0]
+
+    return ttl_value
+
+def get_os(ttl):
+    ttl = int(ttl)
+    if ttl >= 0 and ttl <= 64:
+        return "Linux"
+    elif ttl >= 65 and ttl <= 128:
+        return "Windows"
+    elif ttl >= 129 and ttl <= 254:
+        return "Solaris/AIX"
+    else:
+        return "Not Found"
+
+if __name__ == '__main__':
+    ip_address = sys.argv[1]
+    ttl = get_ttl(ip_address)
+    os_name = get_os(ttl)
+    print("\n[*] %s (ttl -> %s): %s\n" % (ip_address, ttl, os_name))
+```
+
+A grandes rasgos, vemos cómo lanzamos un ping a la dirección IP pasada por parámetro y después aplicamos una serie de filtros para quedarnos solamente con el valor del `TTL`. Con este valor podemos determinar qué SO tiene la máquina víctima.
+
+Una vez que tenemos nuestro script, le damos permisos de ejecución y lo podemos poner en alguna ruta del `PATH` para poder mencionarlo desde una ruta relativa. Por ejemplo, lo podemos mover a `/usr/bin`.
+
+---
