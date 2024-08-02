@@ -1,6 +1,7 @@
-# Apuntes-CursoHackingEtico-S4vitar
-Apuntes sobre el curso de introdución al hacking ético de s4vitar
------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# Apuntes sobre el curso de introdución al hacking ético de s4vitar
+
+---
+
 Aclarar que las explotaciones que se muestran, en la gran mayoria, ya no son funcionales de la manera que él las explica (ya que són errores de seguridad para ganar acceso a root que ya han sido solucionados, en la versión actual de linux).
 Por lo tanto, estos metodos se deben de tomar como simple práctica y conocimiento básico.
 
